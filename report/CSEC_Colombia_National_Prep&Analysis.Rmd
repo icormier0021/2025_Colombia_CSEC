@@ -1,7 +1,7 @@
 ---
-title: "CSECT 2018 VACS Analysis- National Stratum"
+title: "CSEC in Colombia: National Stratum- Data Prep & Analysis"
 author: "Isaac Cormier"
-date: "7/25/2025"
+date: "2025/08/05"
 output:
   html_document:
     self_contained: true
@@ -14,8 +14,6 @@ output:
   pdf_document:
     toc: yes
     toc_depth: '5'
-params:
-  data: ./Colombia VACS SPSS data.sav
 ---
 
 ```{css, echo = FALSE}
@@ -31,23 +29,24 @@ library(fs)
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 knitr::opts_chunk$set(echo = TRUE)
 
-packages <- c("survey", "haven", "dplyr", "labelled", "tidyr", "DT", "skimr", "ggplot2", "knitr", "kableExtra", "svyweight", "purrr", "srvyr", "tibble")
+packages <- c("survey", "haven", "dplyr", "labelled", "tidyr", "DT", "skimr", "ggplot2", "knitr", "kableExtra", "svyweight", "purrr", "srvyr", "tibble", "here")
 
 if(!require("pacman"))install.packages("pacman")
 
 pacman::p_load(char = packages, character.only = TRUE)
 ```
 
-Below is the code and output for the prevalence of the CSEC analysis of the national 2018 Colombia VACS sample. I've annotated the steps I've taken for convenience.    
-Code sections are set to 'hide' by deafult; to see the code that was used to generate each section, select the 'show' button on the right hand side. Please note that much of the base `survey()` or `srvyr()`commands are wrapped in functions and workflows for rendering the data for RMarkdown. 
+Below is the code and output for the prevalence of the CSEC analysis of the national 2018 Colombia VACS sample. I've annotated the steps I've taken for convenience.\
+Code sections are set to 'hide' by deafult; to see the code that was used to generate each section, select the 'show' button on the right hand side. Please note that much of the base `survey()` or `srvyr()`commands are wrapped in functions and workflows for rendering the data for RMarkdown.
 
-#  **1. Load and Clean Data**
+# **1. Load and Clean Data**
+
 Import the SPSS VACS dataset and prepare a cleaned dataframe for analysis. This includes recoding variables into binary or factor formats, creating summary variables, and ensuring everything is labeled. For categorical variables with scaled levels (e.g., `MomClose`, `DadClose`), continuous, reverse-coded versions were added for use when computing the summary variables.
 
 The cleaned and structured dataset is saved in SPSS format as "R_Colombia_VACS_National_df.sav".
 
 ```{r loadData}
-VACSData <- read_sav(params$data)
+VACSData <- read_sav(here::here("rawdata", "Colombia_VACS_national_data.sav"))
 ```
 
 ```{r helperFunctions}
@@ -708,7 +707,9 @@ df <- set_variable_labels(df,
                             IPVTotal = "Experienced any physical or emotional violence"
 )
 ```
+
 # **2. Inspect unweighted data prior to survey analysis**
+
 Ensure that there are no blatant outliers or unexpected missing values before proceeding to analysis.
 
 ```{r skimDF, echo=FALSE}
@@ -778,7 +779,9 @@ for (v in cat_vars) {
 
 cat('</div>')
 ```
+
 # **3. Prepare filter variables**
+
 Prepare the age and CSEC filters to be used during the analysis. The variable `CSEC` is a binarized variable that is set to `1` if the respondent was between the ages of 13 and 17 when they reported a history of transactional sex, or if the respondent was 18 or older but reported a history of transactional sex that first occured when they were under 18. Otherwise, `CSEC` = `0`.
 
 ```{r filters}
@@ -804,10 +807,13 @@ df <- set_variable_labels(df,
 )
   
 ```
+
 # **4. Specify Survey Design for Analyses**
-Creates the survey design object, which incorporates the complex sampling structure of the VACS dataset. Design effect and effective sample size are calculated to show how well the population sample represents the target population. 
+
+Creates the survey design object, which incorporates the complex sampling structure of the VACS dataset. Design effect and effective sample size are calculated to show how well the population sample represents the target population.
 
 Note: The use of `~` indicates that the preceeding variable comes from the dataframe defined in the `data` argument
+
 ```{r keyTbl, echo=FALSE, warning=FALSE, message=FALSE}
 key <- tibble(
   `Code Line` = c(
@@ -840,7 +846,6 @@ key %>%
 
 ```
 
-
 ```{r svyDesign}
 vacsDesign <- df %>% 
   as_survey_design(
@@ -859,11 +864,20 @@ n_eff_wght <- eff_n(vacsDesign) #Kish effective sample size
 wghtEfficiency <- n_eff_wght / n #Weighting efficiency 
 designEffectWght <- 1/wghtEfficiency #Design effect due to weights
 
+# Helper functions for formatting
+comma_format <- function(x) {
+  format(x, big.mark = ",", scientific = FALSE)
+}
+
+percent_format <- function(x, accuracy = 0.1) {
+  paste0(sprintf(paste0("%.", -log10(accuracy), "f"), x * 100), "%")
+}
+
 ```
 
 
-The 2018 VACS team collected information from **`r n`** respondents. 
-After applying the final survey weights, the cases represent an estimated **`r comma(n_hat)`** individuals in the target population. Using Kish's (1965) formula, the effective sample size is approximately **`r round(n_eff_wght)`** when adjusting for unequal weights alone (not accounting for stratification or clustering), with a weighting efficiency of **`r percent(wghtEfficiency, accuracy = 0.1)`**. This means that the sample weights inflate the sampling variance by a factor of **`r sprintf('%.2f', designEffectWght)`**, and that the weights reduce statistical precision relative to simple-random sampling by approximately **`r percent(1-wghtEfficiency, accuracy = 0.1)`**.
+The 2018 VACS team collected information from **`r n`** respondents. After applying the final survey weights, the cases represent an estimated **`r comma_format(n_hat)`** individuals in the target population. Using Kish's (1965) formula, the effective sample size is approximately **`r round(n_eff_wght)`** when adjusting for unequal weights alone (not accounting for stratification or clustering), with a weighting efficiency of **`r percent_format(wghtEfficiency, accuracy = 0.1)`**. This means that the sample weights inflate the sampling variance by a factor of **`r sprintf('%.2f', designEffectWght)`**, and that the weights reduce statistical precision relative to simple-random sampling by approximately **`r percent_format(1-wghtEfficiency, accuracy = 0.1)`**.
+
 
 Below is information about the survey design and the sample itself, such as the number of PSUs per strata using the `summary()` function
 
@@ -872,7 +886,8 @@ vacsDesign
 ```
 
 # **5. CSEC Descriptives & Frequencies**
-Prepares descriptive statistics on the prevalence of CSEC among respondents. All descriptives and frequencies are seperated by age (i.e., `Age13to17`, `Age18Plus`). Functions were set to remove any `NA` values from their calculations, so not to send back an error. 
+
+Prepares descriptive statistics on the prevalence of CSEC among respondents. All descriptives and frequencies are seperated by age (i.e., `Age13to17`, `Age18Plus`). Functions were set to remove any `NA` values from their calculations, so not to send back an error.
 
 ```{r tblHelper, echo=FALSE}
 createKable <- function(tbl, title = "My Title"){
@@ -1174,7 +1189,9 @@ CSECProp <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>%
 createKable(CSECProp, "Proportions for Transactional Sex, Type of Transactional Sex, and Transactional Sex with a Tourist filtered by respondents Ages 13-17")
 
 ```
+
 ## b) Subset of Respondents Ages 18 Plus who reported transactional sex while a minor (CSEC)
+
 ```{r CSECDescripAge18PlusCSEC, asis = TRUE}
 
 CSECAgeDescriptives <- c("SexTransactAge", "SexTransactInitAge") %>% 
@@ -1212,12 +1229,15 @@ createKable(CSECProp, "Proportions for Transactional Sex, Type of Transactional 
 ```
 
 # **6. Main Analysis**
-Performs the main analyses on CSEC among respondents and associations with demographic, psychosocial, and enviornmental factors. Analysis is filtered by age. 
 
-## a) Descriptives, Proportions, and Counts 
+Performs the main analyses on CSEC among respondents and associations with demographic, psychosocial, and enviornmental factors. Analysis is filtered by age.
+
+## a) Descriptives, Proportions, and Counts
+
 Proportions were all multiplied by 100 and represent the estimated percentages of the target population.
 
 ### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
+
 ```{r DescriptivesAge13to17, asis = TRUE}
 
 ContVariables <- c("Age","MoneyWorryCont", "FriendCont", "MomCloseCont","DadCloseCont", "AllInsecure",
@@ -1260,6 +1280,7 @@ createKable(CatDescriptives, "Proportions for Categorical and Binarized Variable
 ```
 
 ### ii) Filtered: Ages 18 Plus who reported transactional sex while a minor (CSEC)
+
 ```{r DescriptivesAge18PlusCSEC, asis=TRUE}
 
 ContDescriptives <- ContVariables %>% 
@@ -1315,7 +1336,9 @@ PropAge13to17 <- CatVariables %>%
 createKable(PropAge13to17, "Proportions of Variables by CSEC for Respondenets Ages 13 to 17")
 
 ```
+
 ### ii) Filtered: Ages 18 Plus who answered question about transactional sex while underage (CSEC)
+
 ```{r crossTab2, asis = TRUE}
         
 crossTabAge18Plus <- CatVariables %>% 
@@ -1345,9 +1368,10 @@ createKable(PropAge18Plus, "Proportions of Variables by CSEC for Respondenets Ag
 
 ## c) Chi-Square Tests for Categorical Variables by CSEC
 
-Calculated design-adjusted Wald Chi-Square Tests of Indepndence. 
+Calculated design-adjusted Wald Chi-Square Tests of Indepndence.
 
 ### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
+
 ```{r chiSqu1, results='asis'}
 
 calculateChiSquTest <- function(var, group, design, filter_expr = NULL, statistic = "adjWald", na.rm = TRUE) {
@@ -1479,7 +1503,9 @@ for (v in CatVariables) {
 }
 
 ```
+
 ### ii) Filtered: Ages 18 Plus who answered question about transactional sex while underage (CSEC)
+
 ```{r chiSqu2, results='asis'}
 
 for (v in CatVariables) {
@@ -1493,11 +1519,12 @@ for (v in CatVariables) {
 
 ```
 
-
 ## d) T-Tests for Continous Variables Grouped by CSEC
-Calculated design-adjusted two-sample t-tests. 
+
+Calculated design-adjusted two-sample t-tests.
 
 ### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
+
 ```{r tTest1, results = 'asis'}
 calculateTTest <- function(var, group, design, filter_expr = NULL, na.rm = TRUE) {
   filt_q <- rlang::enquo(filter_expr)
@@ -1564,7 +1591,9 @@ knitr::kable(ttest_resultsA, caption = "T-test Results for Age 13–17", format 
 cat("\n\n<p><em>* p < .05, ** p < .01, *** p < .001</em></p>")
 
 ```
+
 ### ii) Filtered: Ages 18 Plus who answered question about transactional sex while underage (CSEC)
+
 ```{r tTest2, results='asis'}
 
 ttest_resultsB <- ContVariables %>% 
@@ -1613,10 +1642,9 @@ cat("\n\n<p><em>* p < .05, ** p < .01, *** p < .001</em></p>")
 ```
 
 # **References & Resources**
-- Lumley, T. (2010). Complex Surveys: A Guide to Analysis Using R. Wiley.
-- Bruin, J. (2006). Survey Data Analysis With R.  UCLA: Statistical Consulting Group.  https://stats.oarc.ucla.edu/r/seminars/survey-data-analysis-with-r/
-- Lumley, T., Gao, P., & Schneider, B. (2019). survey: Analysis of Complex Survey Samples (R Package Manual). CRAN. https://cran.r-project.org/web/packages/survey/survey.pdf
-- Freedman, G., Lumley, T., Zoltak, T., Schneider, B., & Krivitsky, P.(2024). srvyr: 'dplyr'-like syntax for survey analysis (R Package Manual). CRAN. https://cran.r-project.org/web/packages/srvyr/srvyr.pdf
-- Lohr, S. L. (2010). Sampling: Design and Analysis (2nd ed.). Boston, MA: Brooks/Cole.
 
-
+-   Lumley, T. (2010). Complex Surveys: A Guide to Analysis Using R. Wiley.
+-   Bruin, J. (2006). Survey Data Analysis With R. UCLA: Statistical Consulting Group. <https://stats.oarc.ucla.edu/r/seminars/survey-data-analysis-with-r/>
+-   Lumley, T., Gao, P., & Schneider, B. (2019). survey: Analysis of Complex Survey Samples (R Package Manual). CRAN. <https://cran.r-project.org/web/packages/survey/survey.pdf>
+-   Freedman, G., Lumley, T., Zoltak, T., Schneider, B., & Krivitsky, P.(2024). srvyr: 'dplyr'-like syntax for survey analysis (R Package Manual). CRAN. <https://cran.r-project.org/web/packages/srvyr/srvyr.pdf>
+-   Lohr, S. L. (2010). Sampling: Design and Analysis (2nd ed.). Boston, MA: Brooks/Cole.
