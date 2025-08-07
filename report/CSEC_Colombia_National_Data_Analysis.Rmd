@@ -131,7 +131,7 @@ Prepares descriptive statistics on the prevalence of CSEC among respondents. All
 
 NOTE: There were n=1040 individuals who reported not having had sex in their life, who were set to NA for the question on transactional sex.
 
-```{r tblHelper, echo=FALSE}
+```{r statHelpers, echo=FALSE}
 createKable <- function(tbl, title = "My Title"){
   boundary_rows <- which(
     c(FALSE, tbl[[1]][-1] != tbl[[1]][-length(tbl[[1]])])
