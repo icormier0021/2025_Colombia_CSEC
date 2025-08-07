@@ -40,12 +40,12 @@ Below is the code and output for the analysis of the national 2018 Colombia VACS
 Code sections are set to 'hide' by default; to see the code that was used to generate each section, select the 'show' button on the right hand side. Please note that much of the commands are wrapped in functions and workflows for rendering the data for RMarkdown. For data analysis, I've relied upon the `survey()` and `srvyr()` packages.
 
 
-The cleaned data-set ready for analysis is saved under '/data' as "Colombia_VACS_National_data_CLEANED.sav". To review the process used for reviewing and preparing the raw data, please review the RMarkdown report "/report/CSEC_Colombia_National_Data_Clean-Prep.Rmd". 
+The cleaned data-set ready for analysis is saved under '/data' as "Colombia_VACS_National_data_CLEANED.rds". To review the process used for reviewing and preparing the raw data, please review the RMarkdown report "/report/CSEC_Colombia_National_Data_Clean-Prep.Rmd". 
 
 # **1. Load Data**
 
 ```{r loadData}
-df <- read_sav(here::here("data", "Colombia_VACS_National_data_CLEANED.sav"))
+df <- readRDS(here::here("data", "Colombia_VACS_National_data_CLEANED.rds"))
 ```
 
 # **2. Specify Survey Design for Analyses**
@@ -127,57 +127,9 @@ vacsDesign
 
 # **3. CSEC Descriptive & Frequencies**
 
-Prepares descriptive statistics on the prevalence of CSEC among respondents. All descriptives and frequencies are seperated by age (i.e., `Age13to17`, `Age18Plus`). Functions were set to remove any `NA` values from their calculations, so not to send back an error.
+Prepares descriptive statistics on the prevalence of CSEC among respondents. All descriptives and frequencies are seperated by age (i.e., `Age13to17`, `Age18Plus`). Functions were set to remove any `NA` values from their calculations, so not to send back an error. 
 
-**Mean & Totals Tables (Continuous Variables)**
-
-| Column Label | Definition | Interpretation |
-|--------------|------------|----------------|
-| Variable | Variable name from dataset | Identifies the specific variable being analyzed |
-| Variable Label | Descriptive label for the variable | Human-readable description of what the variable measures |
-| Mean | Weighted population mean | Average value in the target population, accounting for survey weights |
-| Mean(SE) | Standard error of the mean | Measure of precision; smaller values indicate more precise estimates |
-| Mean(CV) | Coefficient of variation of the mean | Relative measure of precision (SE/Mean); values <0.30 generally considered reliable |
-| Mean(Low CI 95%) | Lower bound of 95% confidence interval | We can be 95% confident the true population mean is above this value |
-| Mean(Upp CI 95%) | Upper bound of 95% confidence interval | We can be 95% confident the true population mean is below this value |
-| Mean(DeEff) | Design effect for the mean | Ratio of actual variance to simple random sample variance; >1 indicates clustering/stratification increases variance |
-| Q25 | 25th percentile (first quartile) | 25% of the population falls below this value |
-| Median | 50th percentile (median) | Middle value; 50% of population falls above/below this value |
-| Q75 | 75th percentile (third quartile) | 75% of the population falls below this value |
-| TotalRespond | Unweighted count of valid responses | Number of survey respondents who answered this question |
-| TotalNA | Unweighted count of missing values | Number of survey respondents who did not answer this question |
-| Total | Weighted population total | Estimated total in the target population, accounting for survey weights |
-| Total(SE) | Standard error of the total | Measure of precision for the population total estimate |
-| Total(CV) | Coefficient of variation of the total | Relative measure of precision for the total (SE/Total) |
-| Total(Low CI 95%) | Lower bound of 95% CI for total | We can be 95% confident the true population total is above this value |
-| Total(Upp CI 95%) | Upper bound of 95% CI for total | We can be 95% confident the true population total is below this value |
-
-**Count Tables (Categorical Variables)**
-| Column Label | Definition | Interpretation |
-|--------------|------------|----------------|
-| Variable | Variable name from dataset | Identifies the specific variable being analyzed |
-| Variable Label | Descriptive label for the variable | Human-readable description of what the variable measures |
-| Answer | Response category | Shows "Yes"/"No" or other categorical response options |
-| N | Weighted count estimate | Estimated number of people in this category in the target population |
-| N(SE) | Standard error of the count | Measure of precision for the count estimate |
-| N (Lower CI 95%) | Lower bound of 95% confidence interval | We can be 95% confident the true population count is above this value |
-| N (Upper CI 95%) | Upper bound of 95% confidence interval | We can be 95% confident the true population count is below this value |
-| N(CV) | Coefficient of variation of the count | Relative measure of precision (SE/N); values <0.30 generally considered reliable |
-
-**Proportion Tables (Categorical Variables)**
-
-| Column Label | Definition | Interpretation |
-|--------------|------------|----------------|
-| Variable | Variable name from dataset | Identifies the specific variable being analyzed |
-| Variable Label | Descriptive label for the variable | Human-readable description of what the variable measures |
-| Answer | Response category | Shows "Yes"/"No" or other categorical response options |
-| Prop | Weighted proportion (as percentage) | Estimated percentage of the target population in this category |
-| Prop(SE) | Standard error of the proportion | Measure of precision for the proportion estimate |
-| Prop (Lower CI 95%) | Lower bound of 95% confidence interval | We can be 95% confident the true population percentage is above this value |
-| Prop (Upper CI 95%) | Upper bound of 95% confidence interval | We can be 95% confident the true population percentage is below this value |
-| Prop(CV) | Coefficient of variation of proportion | Relative measure of precision (SE/Prop) |
-| TotalRespond | Unweighted count of valid responses | Number of survey respondents who answered this question |
-| TotalNA | Unweighted count of missing values | Number of survey respondents who did not answer this question |
+NOTE: There were n=1040 individuals who reported not having had sex in their life, who were set to NA for the question on transactional sex.
 
 ```{r tblHelper, echo=FALSE}
 createKable <- function(tbl, title = "My Title"){
@@ -214,38 +166,67 @@ createKable <- function(tbl, title = "My Title"){
 
 #Helper functions for calculating survey means, quantiles, totals, proportions and counts
 
-calculateMean_Total <- function(var, design, filter_expr = NULL) {
+calculateMean_Total <- function(var, design, filter_expr = NULL, total = FALSE) {
   f <- rlang::enquo(filter_expr)
   var_label <- attr(design$variables[[var]], "label")
   if (is.null(var_label)) var_label <- "No Label Specified"
-  design %>%
-    { if (rlang::quo_is_null(f)) . else filter(., !!f) } %>% 
-    summarise(
-      Mean = survey_mean(!!sym(var), na.rm = TRUE, vartype=c("se", "cv", "ci"), deff = TRUE),
-      Q25             = survey_quantile(!!sym(var), 0.25, na.rm = TRUE, vartype = "ci")[[1]],
-      Median          = survey_quantile(!!sym(var), 0.50, na.rm = TRUE, vartype = "ci")[[1]],
-      Q75             = survey_quantile(!!sym(var), 0.75, na.rm = TRUE, vartype = "ci")[[1]],
-      TotalRespond    = sum(!is.na(!!sym(var))),
-      TotalNA         = sum(is.na(!!sym(var))),
-      Total           = survey_total(!!sym(var), na.rm = TRUE, vartype = c("se", "cv", "ci"))
-    ) %>% 
-    mutate(
-      Variable = var,
-      `Variable Label` = var_label
+  
+  # Conditionally build the summarise call
+  if (total) {
+    result <- design %>%
+      { if (rlang::quo_is_null(f)) . else filter(., !!f) } %>% 
+      summarise(
+        Mean = survey_mean(!!sym(var), na.rm = TRUE, vartype=c("se", "cv", "ci"), deff = TRUE),
+        Q25             = survey_quantile(!!sym(var), 0.25, na.rm = TRUE, vartype = "ci")[[1]],
+        Median          = survey_quantile(!!sym(var), 0.50, na.rm = TRUE, vartype = "ci")[[1]],
+        Q75             = survey_quantile(!!sym(var), 0.75, na.rm = TRUE, vartype = "ci")[[1]],
+        TotalRespond    = sum(!is.na(!!sym(var))),
+        TotalNA         = sum(is.na(!!sym(var))),
+        Total           = survey_total(!!sym(var), na.rm = TRUE, vartype = c("se", "cv", "ci"))
       ) %>% 
-    rename(
-      `Mean(SE)` = Mean_se,
-      `Mean(CV)` = Mean_cv,
-      `Mean(Low CI 95%)` = Mean_low,
-      `Mean(Upp CI 95%)` = Mean_upp,
-      `Mean(DeEff)` = Mean_deff,
-      `Total(SE)` = Total_se,
-      `Total(CV)` = Total_cv,
-      `Total(Low CI 95%)` = Total_low,
-      `Total(Upp CI 95%)` = Total_upp
-    ) %>% 
-    select(Variable,`Variable Label`, everything())
+      mutate(
+        Variable = var,
+        `Variable Label` = var_label
+      ) %>% 
+      rename(
+        `Mean(SE)` = Mean_se,
+        `Mean(CV)` = Mean_cv,
+        `Mean(Low CI 95%)` = Mean_low,
+        `Mean(Upp CI 95%)` = Mean_upp,
+        `Mean(DeEff)` = Mean_deff,
+        `Total(SE)` = Total_se,
+        `Total(CV)` = Total_cv,
+        `Total(Low CI 95%)` = Total_low,
+        `Total(Upp CI 95%)` = Total_upp
+      )
+  } else {
+    result <- design %>%
+      { if (rlang::quo_is_null(f)) . else filter(., !!f) } %>% 
+      summarise(
+        Mean = survey_mean(!!sym(var), na.rm = TRUE, vartype=c("se", "cv", "ci"), deff = TRUE),
+        Q25             = survey_quantile(!!sym(var), 0.25, na.rm = TRUE, vartype = "ci")[[1]],
+        Median          = survey_quantile(!!sym(var), 0.50, na.rm = TRUE, vartype = "ci")[[1]],
+        Q75             = survey_quantile(!!sym(var), 0.75, na.rm = TRUE, vartype = "ci")[[1]],
+        TotalRespond    = sum(!is.na(!!sym(var))),
+        TotalNA         = sum(is.na(!!sym(var)))
+      ) %>% 
+      mutate(
+        Variable = var,
+        `Variable Label` = var_label
+      ) %>% 
+      rename(
+        `Mean(SE)` = Mean_se,
+        `Mean(CV)` = Mean_cv,
+        `Mean(Low CI 95%)` = Mean_low,
+        `Mean(Upp CI 95%)` = Mean_upp,
+        `Mean(DeEff)` = Mean_deff
+      )
+  }
+  
+  result %>%
+    select(Variable, `Variable Label`, everything())
 }
+
 
 calculateCount <- function(var, design, filter_expr = NULL){
   f <- rlang::enquo(filter_expr)
@@ -289,17 +270,17 @@ calculateProp <- function(var, design, filter_expr = NULL) {
       drop_na(!!sym(var)) %>% 
       group_by(!!sym(var)) %>% 
       summarise(
-        Prop            = survey_prop(x = !!sym(var), na.rm = TRUE, prop_method = "xlogit", vartype= c("se", "ci", "cv")) *100,
+        Prop            = survey_prop(x = !!sym(var), na.rm = TRUE, prop_method = "xlogit", vartype= c("se", "ci", "cv")),
         TotalRespond    = sum(!is.na(!!sym(var))),
         TotalNA         = sum(is.na(!!sym(var)))
       ) %>% 
       ungroup() %>% 
       rename(
         Answer = !!sym(var),
-      `Prop(SE)` = Prop_se,
+      `Prop (SE)` = Prop_se,
       `Prop (Lower CI 95%)` = Prop_low,
       `Prop (Upper CI 95%)` = Prop_upp,
-      `Prop(CV)` = Prop_cv
+      `Prop (CV)` = Prop_cv
         ) %>%
       mutate(
         Variable = var,
@@ -310,7 +291,11 @@ calculateProp <- function(var, design, filter_expr = NULL) {
           `0` = "No",
           `1` = "Yes",
           .default = Answer
-          )
+          ),
+        Prop = Prop*100,
+        `Prop (SE)` = `Prop (SE)`*100,
+        `Prop (Lower CI 95%)` = `Prop (Lower CI 95%)`*100,
+        `Prop (Upper CI 95%)`= `Prop (Upper CI 95%)`*100
         ) %>% 
       select(Variable,`Variable Label`, everything())
   },
@@ -396,7 +381,7 @@ calculatePropGrouped <- function(var, group, design, filter_expr = NULL) {
       drop_na(!!sym(var), !!sym(group)) %>% 
       group_by(!!sym(group),!!sym(var) ) %>% 
       summarise(
-        Prop = survey_prop(x = !!sym(var), na.rm = TRUE, prop_method = "xlogit", vartype= c("se", "ci", "cv")) *100
+        Prop = survey_prop(x = !!sym(var), na.rm = TRUE, prop_method = "xlogit", vartype= c("se", "ci", "cv"))
         ) %>% 
       ungroup() %>% 
         mutate(
@@ -415,7 +400,11 @@ calculatePropGrouped <- function(var, group, design, filter_expr = NULL) {
         ) %>%
       mutate(
         `Variable Levels` = recode(as.character(`Variable Levels`), `0` = "No", `1` = "Yes"),
-        `Group Levels` = recode(as.character(`Group Levels`), `0` = "No", `1` = "Yes")
+        `Group Levels` = recode(as.character(`Group Levels`), `0` = "No", `1` = "Yes"),
+        Prop = Prop*100,
+        `Prop (SE)` = `Prop (SE)`*100,
+        `Prop (Lower CI 95%)` = `Prop (Lower CI 95%)`*100,
+        `Prop (Upper CI 95%)`= `Prop (Upper CI 95%)`*100
       ) %>% 
       select(Variable,`Variable Label`,`Grouping Variable`, `Group Label`, `Group Levels`, `Variable Levels`, everything())
   },
@@ -440,39 +429,86 @@ calculatePropGrouped <- function(var, group, design, filter_expr = NULL) {
 
 ```
 
-## a) Subset of Respondents Ages 13 to 17 who reported transactional sex (CSEC)
+## a) Subset of sexually active respondents Ages 13 to 17 who reported transactional sex (CSEC)
 
-```{r CSECDescripAge13to17, asis = TRUE}
+```{r MeanTotalsAge13to17, asis = TRUE}
 
 CSECAgeDescriptives <- c("SexTransactAge", "SexTransactInitAge") %>% 
   map( ~ calculateMean_Total(
     var = .x, 
     design = vacsDesign,
-    filter_expr = Age13to17 == 1
+    filter_expr = Age13to17 == 1 & CSEC == 1
     )
   ) %>% 
   list_rbind()
 
 createKable(CSECAgeDescriptives, "Mean & Totals for Transactional Sex Victim and Perpetrator Ages filtered by respondents Ages 13-17")
-    
+
+```
+
+
+**Table Key:**
+
+|    |    |    |
+|--------------|------------|----------------|
+| Mean | Weighted population mean | Average value in the target population, accounting for survey weights and study design; Suitable for continuious variables only. |
+| Mean(SE) | Standard error of the population mean | Square root of the estimated variance of the population mean; similar to standard deviation, smaller values indicate more precise estimates. |
+| Mean (CV) | Coefficient of variation of the mean | Measure of relative variability calculated as the standard error expressed as a percentage of the mean (SE/Mean); CV does not depend on the unit of measurement. |
+| Mean (Low CI 95%) | Lower bound of 95% confidence interval | We can be 95% confident the true population mean is above this value |
+| Mean (Upp CI 95%) | Upper bound of 95% confidence interval | We can be 95% confident the true population mean is below this value |
+| Mean (DeEff) | Design effect for the mean | Ratio of actual variance to simple random sample (SRS) variance; Measure of the precision of the survey design compared to a simple random sample; Generally, stratification increases precision while clustering decreases it; DeEff >1 indicates less precision than an SRS. |
+| Q25 | 25th percentile (first quartile) | 25% of the population falls below this value |
+| Median | 50th percentile (median) | Middle value; 50% of population falls above/below this value |
+| Q75 | 75th percentile (third quartile) | 75% of the population falls below this value |
+| TotalRespond | Unweighted count of valid responses | Number of survey respondents who answered this question |
+| TotalNA | Unweighted count of missing values | Number of survey respondents who provided a non-response (e.g., Do Not Know, Unknown, skipped question, etc.). |
+
+
+```{R countsAges13to17, asis = TRUE}
 
 CSECCount <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
     map( ~ calculateCount(
     var = .x, 
     design = vacsDesign,
-    filter_expr = Age13to17 == 1
+    filter_expr = Age13to17 == 1 & CSEC == 1
     )
   ) %>% 
   list_rbind()
   
-createKable(CSECCount, "Counts for Transactional Sex, Type of Transactional Sex, and Transactional Sex with a Tourist filtered by respondents Ages 13-17")
+createKable(CSECCount, "Counts for Transactional Sex, Type of Transactional Sex, and Transactional Sex filtered by respondents Ages 13-17")
 
+```
+**Table Key:**
+
+|   |   |   |
+|--------------|------------|----------------|
+| N | Weighted population count estimate | Estimated number of people in this category in the target population, accounting for the survey design and weighting |
+| N (SE) | Standard error of the count | Square root of the estimated variance of the population count; similar to standard deviation, smaller values indicate more precise estimates. |
+| N (Lower CI 95%) | Lower bound of 95% confidence interval | We can be 95% confident the true population count is above this value |
+| N (Upper CI 95%) | Upper bound of 95% confidence interval | We can be 95% confident the true population count is below this value |
+| N (CV) | Coefficient of variation of the count | Measure of relative variability calculated as the standard error expressed as a percentage of the count (SE/N); CV does not depend on the unit of measurement. |  
+
+```{r propCSECAges13to17, asis = TRUE}
+
+CSECProp <- c("CSEC") %>% 
+    map( ~ calculateProp(
+    var = .x, 
+    design = vacsDesign,
+    filter_expr = Age13to17 == 1 & !is.na(SexTransact)
+    )
+  ) %>% 
+  list_rbind    
+createKable(CSECProp, "Proportions of Sexually Active Respondenets Ages 13-17 who Answered Question about Transactional Sex")
+
+```
+
+```{r propAges13to17, asis = TRUE}
 
 CSECProp <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
     map( ~ calculateProp(
     var = .x, 
     design = vacsDesign,
-    filter_expr = Age13to17 == 1
+    filter_expr = Age13to17 == 1 & CSEC == 1
     )
   ) %>% 
   list_rbind    
@@ -480,9 +516,22 @@ createKable(CSECProp, "Proportions for Transactional Sex, Type of Transactional 
 
 ```
 
+**Table Key:**
+
+|  |  |  |
+|--------------|------------|----------------|
+| Prop | Weighted population proportion (as percentage) | Estimated percentage of the target population in this category, accounting for survey design and weighting; Suitable for categorical variables only. |
+| Prop (SE) | Standard error of the population proportion | Square root of the estimated variance of the proportion; similar to standard deviation, smaller values indicate more precise estimates. |
+| Prop (Lower CI 95%) | Lower bound of 95% confidence interval | We can be 95% confident the true population percentage is above this value |
+| Prop (Upper CI 95%) | Upper bound of 95% confidence interval | We can be 95% confident the true population percentage is below this value |
+| Prop(CV) | Coefficient of variation of proportion | Measure of relative variability calculated as the standard error expressed as a percentage of the proportion (SE/Proportion); CV does not depend on the unit of measurement. |
+| TotalRespond | Unweighted count of valid responses | Number of survey respondents who answered this question |
+| TotalNA | Unweighted count of missing values | Number of survey respondents who provided a non-response (e.g., Do Not Know, Unknown, skipped question, etc.). |
+
+
 ## b) Subset of Respondents Ages 18 Plus who reported transactional sex while a minor (CSEC)
 
-```{r CSECDescripAge18PlusCSEC, asis = TRUE}
+```{r MeanTotalsAge18PlusCSEC, asis = TRUE}
 
 CSECAgeDescriptives <- c("SexTransactAge", "SexTransactInitAge") %>% 
   map( ~ calculateMean_Total(
@@ -494,8 +543,11 @@ CSECAgeDescriptives <- c("SexTransactAge", "SexTransactInitAge") %>%
   list_rbind()
 
 createKable(CSECAgeDescriptives, "Mean & Totals for Transactional Sex Victim and Perpetrator Ages filtered by respondents Ages 18 Plus who reported CSEC")
+```
+
+```{r CountAge18PlusCSEC, asis = TRUE}
     
-CSECCount <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
+CSECCount <- c("CSEC", "SexTransact", "SexTransactType", "SexTransactTourist") %>% 
     map( ~ calculateCount(
     var = .x, 
     design = vacsDesign,
@@ -505,7 +557,23 @@ CSECCount <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>%
   list_rbind()
   
 createKable(CSECCount, "Counts for Transactional Sex, Type of Transactional Sex, and Transactional Sex with a Tourist filtered by respondents Ages 18 Plus who reported CSEC")
+```
 
+```{r propCSECAges18Plus, asis = TRUE}
+
+CSECProp <- c("CSEC") %>% 
+    map( ~ calculateProp(
+    var = .x, 
+    design = vacsDesign,
+    filter_expr = Age18Plus == 1 & !is.na(SexTransact)
+    )
+  ) %>% 
+  list_rbind    
+createKable(CSECProp, "Proportions of Sexually Active Respondenets Ages 13-17 who Answered Question about Transactional Sex")
+
+```
+
+```{r PropAge18PlusCSEC, asis = TRUE}
 CSECProp <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
     map( ~ calculateProp(
     var = .x, 
@@ -526,7 +594,7 @@ Performs the main analyses on CSEC among respondents and associations with demog
 
 Proportions were all multiplied by 100 and represent the estimated percentages of the target population.
 
-### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
+### i) Filtered: Ages 13 to 17 who have had sex (SexAct = 1) and answered transactional sex question (SexTransact = 1 OR SexAct = 0)
 
 ```{r DescriptivesAge13to17, asis = TRUE}
 
@@ -595,6 +663,8 @@ CatDescriptives <- CatVariables %>%
 
 createKable(CatDescriptives, "Proportions for Categorical and Binarized Variables filtered by respondents Ages 18 Plus who reported CSEC")
 ```
+
+
 
 ## b) Cross-Tabulations & Proportions by CSEC
 

@@ -557,6 +557,7 @@ df <- VACSData %>%
                 Alcohol = recode_bin(
                         case_when(Q1200 %in% c(98, 99) ~ NA_real_,
                                   Q1200 == 97          ~ 2,
+                                  is.na(Q1200)         ~ NA_real_,
                                   TRUE                 ~ 1)),
                 across(
                         .cols = paste0("Q100", LETTERS[1:4]),
@@ -611,79 +612,80 @@ df <- VACSData %>%
                 SexTransactTourist = recode_bin(
                         case_when(Q503 %in% c("J", "W")       ~ 1,
                                         Q503 %in% c("Z", "Y") ~ NA_real_,
+                                        is.na(Q503)           ~ NA_real_,
                                         TRUE                  ~ 2
                         )),
                 AllInsecure = rowSums(
                         across(c(FoodSecure, BasicSecure, HousingSecure, ExtraMoneySecure),
                                ~ .x == 0),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllMonit = rowSums(
                         across(starts_with("ParMonitCont"),
                                ~!is.na(.x)),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllIPVPhys = rowSums(
                         across(starts_with("IPVPhys"),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm =FALSE
                 ),
                 AllNonParentPhys = rowSums(
                         across(starts_with("NonParentPhys"),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllParentEmotAbuse = rowSums(
                         across(starts_with("ParentEmotAbuse"),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllIPVEmot = rowSums(
                         across(starts_with("IPVEmot"),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllPeerPhys = rowSums(
                         across(starts_with("PeerPhys"),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllParentPhys = rowSums(
                         across(starts_with("ParentPhys"),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllMHsxs = rowSums(
                         across(
                                 .cols = paste0("MH", LETTERS[1:6]),
                                 ~ 5 - as.integer(.x)
                         ),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 WitnessAnyVio = rowSums(
                         across(c(WitnessParIPV, WitnessSibAbuse, WitnessComVio, WitnessArmConflict),
                                 ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 AllPhysViolence = rowSums(
                         across(c(AllIPVPhys, AllPeerPhys, AllParentPhys, AllNonParentPhys),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 SexAbuseBroad = rowSums(
                         across(c(SexAbuse, PartAttemptRape, ElseAttemptRape, PartCompleteRape, ElseCompleteRape),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 SexAbuseNarrow = rowSums(
                         across(c(SexAbuse, PartCompleteRape, ElseCompleteRape),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
                 IPVTotal = rowSums(
                         across(c(AllIPVPhys, AllIPVEmot),
                                ~.x == 1),
-                        na.rm = TRUE
+                        na.rm = FALSE
                 ),
   ) %>% select(
           VACS_ID,
@@ -1023,27 +1025,28 @@ df <- df %>%
      Age >= 18 , 1L, 0L
    ),
    CSEC = case_when(
-     SexTransact == 1 & Age >= 13 & Age <= 17             ~ 1,
-     SexTransact == 1 & Age >= 18 & SexTransactAge <= 17  ~ 1,
+     SexTransact == 1 & Age13to17 == 1               ~ 1,
+     SexTransact == 1 & Age18Plus == 1 & SexTransactAge <= 17  ~ 1,
      TRUE                                                 ~ 0
    )
   )
 
 df <- set_variable_labels(df,
-                          Age13to17 = "Filter: Age >= 13 & Age <=17",
-                          Age18Plus = "Filter: Age >= 18",
-                          CSEC = "Filter: Reported commercial sexual exploitation as a child"
+                          Age13to17 = "Filter: 'Age >= 13 & Age <=17' = 1; Else = 0",
+                          Age18Plus = "Filter: 'Age >= 18' = 1; Else = 0 ",
+                          CSEC = "Filter: 'Reported underage commercial sexual exploitation' = 1; Else = 0"
 )
   
 ```
 
 # **6. Save Prepared Data**
 
-The cleaned and structured dataset ready for analysis is saved under the sub-directory 'data', and is named "Colombia_VACS_National_data_CLEANED". It is saved in both '.sav' and '.csv' format.
+The cleaned and structured dataset ready for analysis is saved under the sub-directory 'data', and is named "Colombia_VACS_National_data_CLEANED". It is saved in '.rds'(R's native file format), '.sav' and '.csv' format.
 ```{r saveData}
 
 write.csv(df, here::here("data", "Colombia_VACS_National_data_CLEANED.csv"), row.names = FALSE)
 write_sav(df, here::here("data", "Colombia_VACS_National_data_CLEANED.sav"))
+saveRDS(df, here::here("data","Colombia_VACS_National_data_CLEANED.rds"))
 ```
 
 
