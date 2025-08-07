@@ -1,5 +1,5 @@
 ---
-title: "CSEC in Colombia: National Stratum- Data Cleaning & Prep"
+title: "CSEC in Colombia: National Stratum- Data Prep & Cleaning"
 author: "Isaac Cormier"
 date: "2025/08/05"
 output:
@@ -36,22 +36,21 @@ if(!require("pacman"))install.packages("pacman")
 pacman::p_load(char = packages, character.only = TRUE)
 ```
 
-Below is the code and output for the data cleaning and preparation of the national 2018 Colombia VACS sample prior to data analysis. I've annotated the steps I've taken for convenience.
-Code sections are set to 'hide' by default; to see the code that was used to generate each section, select the 'show' button on the right hand side. Please note that much of the commands are wrapped in functions and workflows for rendering the data for RMarkdown. I've relied heavily on the `dplyr` package for cleaning the dataset. 
+Below is the code and output for the data cleaning and preparation of the national 2018 Colombia VACS sample prior to data analysis. I've annotated the steps I've taken for convenience. Code sections are set to 'hide' by default; to see the code that was used to generate each section, select the 'show' button on the right hand side. Please note that much of the commands are wrapped in functions and workflows for rendering the data for RMarkdown. I've relied heavily on the `dplyr` package for cleaning the dataset.
 
-The cleaned data-set ready for analysis is saved under '/data' as "Colombia_VACS_National_data_CLEANED.sav". 
 
-# **1. Load and Clean Data**
+# **1. Load Data**
 
 Import the SPSS VACS data set and prepare a cleaned data frame for analysis. This includes re-coding variables into binary or factor formats, creating summary variables, and ensuring everything is labeled. For categorical variables with scaled levels (e.g., `MomClose`, `DadClose`), continuous, reverse-coded versions were added for use when computing the summary variables.
 
-A codebook of the selected variables and re-coding procedure is saved under '/codebook'.
-
-The cleaned and structured data set is saved in SPSS format as .
+A codebook of the selected variables and re-coding procedure is saved under '/codebooks/CSEC_Colombia_codebook.xlsx'.
 
 ```{r loadData}
 VACSData <- read_sav(here::here("rawdata", "Colombia_VACS_national_data.sav"))
 ```
+# **2. Check Missing Values **
+Check the raw dataset for missing values by preparing a missing value graph to see if there are any patterns in which values are missing. If several variables all seem to have missing values for the same cases, that suggests an intentional missing value (e.g., skipping a set of questions based on a previous answer).
+
 
 ```{r missingVars}
 rawDF <- VACSData %>%
@@ -73,6 +72,29 @@ rawDF <- VACSData %>%
     Q1206A, Q1206B, Q1206C, Q1206D, Q1206E, Q1206F,
     Q400B, Q408, Q417, Q504, Q505, Q503
   )
+
+#ggsave(
+#  filename = "missing_data_plot.png",
+#  plot = miss_plot,
+#  width = 44,        # increase if needed (in inches)
+#  height = 8,        # height in inches
+#  dpi = 500          # high resolution
+#)
+
+```
+
+```{r missinVarTable, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=100, fig.height=40}
+cat('<div style="
+  width: 100%;
+  height: 600px; 
+  overflow-x: scroll;
+  overflow-y: scroll; 
+  border: 2px solid #ddd; 
+  border-radius: 8px;
+  padding: 15px; 
+  background-color: #fafafa;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+">')
 book_colors <- c(
   "#E69F00",  # orange
   "#56B4E9",  # light blue
@@ -84,7 +106,7 @@ book_colors <- c(
 )
 
 miss_plot <- rawDF %>% 
-  vis_miss(cluster = TRUE, show_perc = FALSE) +
+  vis_miss(cluster = TRUE, show_perc = TRUE, show_perc_col = TRUE) +
   scale_fill_manual(
     values = book_colors[c(3, 1)],
     labels = c("Present", "Missing"),
@@ -92,18 +114,166 @@ miss_plot <- rawDF %>%
   ) +
   theme(
     plot.margin = margin(5.5, 30, 5.5, 5.5, "pt"),
-    axis.text.x = element_text(angle = 70, hjust = 1)
+    axis.text.x = element_text(angle = 70, hjust = 1, vjust = 1, size = 8),
+    axis.text.y = element_text(size = 10),
+    panel.grid.major.x = element_line(color = "black", size = 0.5),  # White lines between columns
+    panel.grid.minor.x = element_blank(),
+    text = element_text(size = 10),
+    plot.title = element_text(size = 12),
+        # Force the plot to use more space
+    panel.spacing = unit(0.1, "cm"),
+    strip.text = element_text(size = 9)
   )
+
+# Save plot as temporary file with exact dimensions
+temp_file <- tempfile(fileext = ".png")
 ggsave(
-  filename = "missing_data_plot.png",
+  filename = temp_file,
   plot = miss_plot,
-  width = 24,        # increase if needed (in inches)
-  height = 8,        # height in inches
-  dpi = 300          # high resolution
+  width = 20,
+  height = 6,
+  dpi = 100
 )
+
+# Embed as HTML img tag with fixed width
+cat(paste0('<img src="', temp_file, '" style="display: block; max-width: none; width: 2000px;">'))
+
+cat('</div>')
+
+```
+
+Based on the graph above, there are a few variables that seem to be missing values across the same respondents, while a few others have a less distinctive pattern of missing values.
+
+Below is a table of all variables that have a completion rate of less than 75%
+
+
+```{r missing-data-analysis}
+# Calculate missing values and completion rates for all variables
+missing_summary <- rawDF %>%
+  summarise_all(~sum(is.na(.))) %>%
+  pivot_longer(everything(), names_to = "Variable_Name", values_to = "n_Missing") %>%
+  mutate(
+    Total_Observations = nrow(rawDF),
+    Completion_Rate = round(((Total_Observations - n_Missing) / Total_Observations) * 100, 2)
+  )
+
+# Filter for variables with completion rate < 75%
+low_completion <- missing_summary %>%
+  filter(Completion_Rate < 75) %>%
+  select(`Variable Name` = Variable_Name, 
+         `n Missing` = n_Missing, 
+         `Total Observations` = Total_Observations,
+         `Completion Rate (%)` = Completion_Rate)
+
+# Display the table
+if(nrow(low_completion) > 0) {
+  knitr::kable(low_completion, 
+               caption = "Variables with Completion Rate < 75%",
+               align = c("l", "c", "c"))
+} else {
+  cat("No variables have completion rates below 75%")
+}
+```
+
+To look at these patterns in more detail, we can look at the breakdown of missing values for the variables, based on the levels of a grouping variable. 
+
+**Figure A: Variables without skip option by Sex**
+
+Notes: 
+- Q306 (BullyVic) seems missing across both Sexes
+- Q58 (Partner) seems to have less missing values for males
+
+```{r missingVal_By_Sex, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=100, fig.height=40}
+cat('<div style="
+  width: 100%;
+  height: 600px; 
+  overflow-x: scroll;
+  overflow-y: scroll; 
+  border: 2px solid #ddd; 
+  border-radius: 8px;
+  padding: 15px; 
+  background-color: #fafafa;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+">')
+
+selectDF <- rawDF %>% 
+        select(
+                Sex, H6, H7H, H18, H19, H19A, H20, Q7AA, 
+                Q58, Q306, Q21, Q25, Q35)
+
+miss_by_sex <- selectDF %>%
+  gg_miss_fct(Sex) +
+  scale_fill_gradientn(
+    guide = "colorbar",
+    name = "% Miss",
+    colors = book_colors[c(3, 2, 1)]
+  ) +
+  ylab("Variable") +
+  xlab("Sex") +
+  ggtitle("Missing Data by Sex")
+
+# Save plot as temporary file with exact dimensions
+temp_file <- tempfile(fileext = ".png")
+ggsave(
+  filename = temp_file,
+  plot = miss_by_sex,
+  width = 20,
+  height = 6,
+  dpi = 100
+)
+cat(paste0('<img src="', temp_file, '" style="display: block; max-width: none; width: 2000px;">'))
+cat('</div>')
+```
+**Figure B: Variables without skip option by Age**
+
+Notes: 
+- Q306 (BullyVic) seems missing across all Ages
+- Q58 (Partner) and Q7AA (FoodSecure) seems to have less missing values for younger individuals
+
+```{r missingVal_By_Age, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=100, fig.height=40}
+cat('<div style="
+  width: 100%;
+  height: 600px; 
+  overflow-x: scroll;
+  overflow-y: scroll; 
+  border: 2px solid #ddd; 
+  border-radius: 8px;
+  padding: 15px; 
+  background-color: #fafafa;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+">')
+
+selectDF <- rawDF %>% 
+        select(
+                Q2, H6, H7H, H18, H19, H19A, H20, Q7AA, 
+                Q58, Q306, Q21, Q25, Q35)
+
+miss_by_age <- selectDF %>%
+  gg_miss_fct(Q2) +
+  scale_fill_gradientn(
+    guide = "colorbar",
+    name = "% Miss",
+    colors = book_colors[c(3, 2, 1)]
+  ) +
+  ylab("Variable") +
+  xlab("Age") +
+  ggtitle("Missing Data by Age")
+
+# Save plot as temporary file with exact dimensions
+temp_file <- tempfile(fileext = ".png")
+ggsave(
+  filename = temp_file,
+  plot = miss_by_age,
+  width = 20,
+  height = 6,
+  dpi = 100
+)
+cat(paste0('<img src="', temp_file, '" style="display: block; max-width: none; width: 2000px;">'))
+cat('</div>')
 ```
 
 
+# **3. Recode Variables & Prepare Dataset for Analysis** 
 ```{r helperFunctions}
 recode_bin <- function(x,
                       as_factor = FALSE,
@@ -169,7 +339,7 @@ reverse_5 <- function(x, ...) reverse_n(x, 5, ...)
 
 ```
 
-```{r recode}
+```{r prepare labels}
 ethLabels = c("INDIGENOUS",
               "GYPSY (ROMA)",
               "RAIZAL OF THE ARCHIPELAGO",
@@ -247,7 +417,9 @@ SexTransactTypeLabels <- c(
   `1` = "Female Criminal Gang Member",
   `2` = "Female I met on the internet"
 )
+```
 
+``` {r mutate }
 df <- VACSData %>%
         select(-starts_with("Parenphys"),
                -starts_with("Nonparenphys")) %>%
@@ -636,7 +808,9 @@ df <- VACSData %>%
         SexAbuseBroad,
         SexAbuseNarrow,
         IPVTotal)
+```
 
+``` {r label}
 df <- set_variable_labels(df,
                             Sex = "Sex of respondent",
                             Age = "Age of respondent",
@@ -763,7 +937,7 @@ df <- set_variable_labels(df,
 )
 ```
 
-# **2. Inspect unweighted data prior to survey analysis**
+# **4. Inspect un-weighted data prior to survey analysis**
 
 Ensure that there are no blatant outliers or unexpected missing values before proceeding to analysis.
 
@@ -835,9 +1009,9 @@ for (v in cat_vars) {
 cat('</div>')
 ```
 
-# **3. Prepare filter variables**
+# **5. Prepare filter variables**
 
-Prepare the age and CSEC filters to be used during the analysis. The variable `CSEC` is a binarized variable that is set to `1` if the respondent was between the ages of 13 and 17 when they reported a history of transactional sex, or if the respondent was 18 or older but reported a history of transactional sex that first occured when they were under 18. Otherwise, `CSEC` = `0`.
+Prepare the age and CSEC filters to be used during the analysis. The variable `CSEC` is a binarized variable that is set to `1` if the respondent was between the ages of 13 and 17 when they reported a history of transactional sex, or if the respondent was 18 or older but reported a history of transactional sex that first occurred when they were under 18. Otherwise, `CSEC` = `0`.
 
 ```{r filters}
 df <- df %>% 
@@ -863,838 +1037,15 @@ df <- set_variable_labels(df,
   
 ```
 
-# **4. Specify Survey Design for Analyses**
+# **6. Save Prepared Data**
 
-Creates the survey design object, which incorporates the complex sampling structure of the VACS dataset. Design effect and effective sample size are calculated to show how well the population sample represents the target population.
+The cleaned and structured dataset ready for analysis is saved under the sub-directory 'data', and is named "Colombia_VACS_National_data_CLEANED". It is saved in both '.sav' and '.csv' format.
+```{r saveData}
 
-Note: The use of `~` indicates that the preceeding variable comes from the dataframe defined in the `data` argument
-
-```{r keyTbl, echo=FALSE, warning=FALSE, message=FALSE}
-key <- tibble(
-  `Code Line` = c(
-    "`id = ~PSU`",
-    "`strata = ~DEPT`",
-    "`weights = ~Wght_final`",
-    "`data = data`",
-    "`nest = TRUE`"
-  ),
-  Explanation = c(
-    "Tells R that rather than sampling every individual independently, clusters were sampled first as groups. Since the National & Priority datasets are the first level clusters, the PSU variable is technically the Secondary Sampling Unit (SSU), and represents distinct enumeration areas. You may see SSU used in the VACS report rather than PSU, although they mean the same thing in this context.",
-    "Tells R that the population was divided into non-overlapping subgroups called strata. VACS uses departments and municipalities to define strata.",
-    "Tells R the final sampling weight calculated for each individual. This value is the inverse of the probability that individual was selected for the sample, adjusted for non-response and post-stratification.",
-    "Tells R which dataset contains the survey data, inclduding the PSU, DEPT, and Wght_final variables.",
-    "Tells R that the data contains nested clusters. In case there are repeating cluster values across the strata, R will make sure to treat them as distinct. This ensures that variance estimates are correct."
-  )
-)
-
-key %>%
-  kable(
-    format    = "html",       
-    booktabs  = FALSE,        
-    linesep   = ""            
-  ) %>%
-  kable_styling(
-    position    = "left", 
-    full_width  = FALSE,
-  )
-
-
+write.csv(df, here::here("data", "Colombia_VACS_National_data_CLEANED.csv"), row.names = FALSE)
+write_sav(df, here::here("data", "Colombia_VACS_National_data_CLEANED.sav"))
 ```
 
-```{r svyDesign}
-vacsDesign <- df %>% 
-  as_survey_design(
-  id = PSU,
-  strata = DEPT,
-  weights = Wght_final,
-  nest = TRUE
-)
-```
-
-```{r sampleCharacteristics}
-
-n <- nrow(df) #Unweighted sample size (i.e., number of respondents)
-n_hat <- sum(weights(vacsDesign)) #Weighted population total
-n_eff_wght <- eff_n(vacsDesign) #Kish effective sample size
-wghtEfficiency <- n_eff_wght / n #Weighting efficiency 
-designEffectWght <- 1/wghtEfficiency #Design effect due to weights
-
-# Helper functions for formatting
-comma_format <- function(x) {
-  format(x, big.mark = ",", scientific = FALSE)
-}
-
-percent_format <- function(x, accuracy = 0.1) {
-  paste0(sprintf(paste0("%.", -log10(accuracy), "f"), x * 100), "%")
-}
-
-```
-
-
-The 2018 VACS team collected information from **`r n`** respondents. After applying the final survey weights, the cases represent an estimated **`r comma_format(n_hat)`** individuals in the target population. Using Kish's (1965) formula, the effective sample size is approximately **`r round(n_eff_wght)`** when adjusting for unequal weights alone (not accounting for stratification or clustering), with a weighting efficiency of **`r percent_format(wghtEfficiency, accuracy = 0.1)`**. This means that the sample weights inflate the sampling variance by a factor of **`r sprintf('%.2f', designEffectWght)`**, and that the weights reduce statistical precision relative to simple-random sampling by approximately **`r percent_format(1-wghtEfficiency, accuracy = 0.1)`**.
-
-
-Below is information about the survey design and the sample itself, such as the number of PSUs per strata using the `summary()` function
-
-```{r showDes, echo=FALSE}
-vacsDesign
-```
-
-# **5. CSEC Descriptives & Frequencies**
-
-Prepares descriptive statistics on the prevalence of CSEC among respondents. All descriptives and frequencies are seperated by age (i.e., `Age13to17`, `Age18Plus`). Functions were set to remove any `NA` values from their calculations, so not to send back an error.
-
-```{r tblHelper, echo=FALSE}
-createKable <- function(tbl, title = "My Title"){
-  boundary_rows <- which(
-    c(FALSE, tbl[[1]][-1] != tbl[[1]][-length(tbl[[1]])])
-  )
-  
-  align_vec <- c("l", rep("r", ncol(tbl) - 1))
-  
-  kable(
-    tbl,
-    col.names = names(tbl),
-    align     = align_vec,
-    digits    = 4,        
-    format    = "html",
-    caption   = title
-  ) %>%
-    kable_styling(
-      bootstrap_options = c("condensed", "bordered"),
-      full_width        = FALSE,
-      position          = "left"
-    ) %>%
-    column_spec(
-      which(sapply(tbl, is.numeric)),
-      width     = "60px",
-      extra_css = "padding-left:6px; padding-right:6px;"
-    ) %>% 
-    row_spec(
-      boundary_rows,
-      extra_css = "border-top: 3px solid black;"
-    ) %>%
-        scroll_box(width = "1000px", height = "400px")
-}
-
-#Helper functions for calculating survey means, quantiles, totals, proportions and counts
-
-calculateMean_Total <- function(var, design, filter_expr = NULL) {
-  f <- rlang::enquo(filter_expr)
-  var_label <- attr(design$variables[[var]], "label")
-  if (is.null(var_label)) var_label <- "No Label Specified"
-  design %>%
-    { if (rlang::quo_is_null(f)) . else filter(., !!f) } %>% 
-    summarise(
-      Mean = survey_mean(!!sym(var), na.rm = TRUE, vartype=c("se", "cv", "ci"), deff = TRUE),
-      Q25             = survey_quantile(!!sym(var), 0.25, na.rm = TRUE, vartype = "ci")[[1]],
-      Median          = survey_quantile(!!sym(var), 0.50, na.rm = TRUE, vartype = "ci")[[1]],
-      Q75             = survey_quantile(!!sym(var), 0.75, na.rm = TRUE, vartype = "ci")[[1]],
-      TotalRespond    = sum(!is.na(!!sym(var))),
-      TotalNA         = sum(is.na(!!sym(var))),
-      Total           = survey_total(!!sym(var), na.rm = TRUE, vartype = c("se", "cv", "ci"))
-    ) %>% 
-    mutate(
-      Variable = var,
-      `Variable Label` = var_label
-      ) %>% 
-    rename(
-      `Mean(SE)` = Mean_se,
-      `Mean(CV)` = Mean_cv,
-      `Mean(Low CI 95%)` = Mean_low,
-      `Mean(Upp CI 95%)` = Mean_upp,
-      `Mean(DeEff)` = Mean_deff,
-      `Total(SE)` = Total_se,
-      `Total(CV)` = Total_cv,
-      `Total(Low CI 95%)` = Total_low,
-      `Total(Upp CI 95%)` = Total_upp
-    ) %>% 
-    select(Variable,`Variable Label`, everything())
-}
-
-calculateCount <- function(var, design, filter_expr = NULL){
-  f <- rlang::enquo(filter_expr)
-  var_label <- attr(design$variables[[var]], "label")
-  if (is.null(var_label)) var_label <- "No Label Specified"
-  design %>% 
-    drop_na(!!sym(var)) %>% 
-    { if (rlang::quo_is_null(f)) . else filter(., !!f) } %>% 
-    group_by(!!sym(var)) %>% 
-    survey_count(!!sym(var), name = 'N', vartype = c("se", "ci", "cv")) %>%
-    mutate(
-      Variable = var,
-      `Variable Label` = var_label
-      ) %>% 
-    rename(
-      Answer = !!sym(var),
-    `N(SE)` = N_se,
-    `N (Lower CI 95%)` = N_low,
-    `N (Upper CI 95%)` = N_upp,
-    `N(CV)` = N_cv
-    ) %>% 
-    mutate(
-      Answer = recode(
-        Answer,
-        `0` = "No",
-        `1` = "Yes",
-        .default = as.character(Answer)
-        )
-      ) %>% 
-    select(Variable, `Variable Label`, everything())
-}
-
-calculateProp <- function(var, design, filter_expr = NULL) {
-  f <- rlang::enquo(filter_expr)
-  var_label <- attr(design$variables[[var]], "label")
-  if (is.null(var_label)) var_label <- "No Label Specified"
-  tryCatch(
-    {
-    design %>%
-      { if (rlang::quo_is_null(f)) . else filter(., !!f) } %>% 
-      drop_na(!!sym(var)) %>% 
-      group_by(!!sym(var)) %>% 
-      summarise(
-        Prop            = survey_prop(x = !!sym(var), na.rm = TRUE, prop_method = "xlogit", vartype= c("se", "ci", "cv")) *100,
-        TotalRespond    = sum(!is.na(!!sym(var))),
-        TotalNA         = sum(is.na(!!sym(var)))
-      ) %>% 
-      ungroup() %>% 
-      rename(
-        Answer = !!sym(var),
-      `Prop(SE)` = Prop_se,
-      `Prop (Lower CI 95%)` = Prop_low,
-      `Prop (Upper CI 95%)` = Prop_upp,
-      `Prop(CV)` = Prop_cv
-        ) %>%
-      mutate(
-        Variable = var,
-        `Variable Label` = var_label,
-        Answer = as.character(Answer),
-        Answer = recode(
-          Answer,
-          `0` = "No",
-          `1` = "Yes",
-          .default = Answer
-          )
-        ) %>% 
-      select(Variable,`Variable Label`, everything())
-  },
-    error = function(e) {
-      warning("Error summarising ", var, ": ", e$message)
-      tibble(
-        Variable           = var,
-        `Variable Label`   = var_label,
-        Answer             = NA_character_,
-        Prop               = NA_real_,
-        `Prop(SE)`         = NA_real_,
-        `Prop (Lower CI 95%)`= NA_real_,
-        `Prop (Upper CI 95%)`= NA_real_,
-        `Prop(CV)`         = NA_real_,
-        TotalRespond       = NA_integer_,
-        TotalNA            = NA_integer_
-      )
-    }
-  )
-}
-
-calculateCrossTab <- function(var, group, design, filter_expr = NULL){
-  f <- rlang::enquo(filter_expr)
-
-  df <- design %>% 
-    drop_na(!!sym(var), !!sym(group)) %>% 
-    { if (rlang::quo_is_null(f)) . else filter(., !!f) }
-  var_label <- attr(design$variables[[var]], "label")
-  group_label <- attr(design$variables[[group]], "label")
-  if (is.null(var_label)) var_label <- "No Label Specified"
-  if (is.null(group_label)) group_label <- "No Label Specified"
-  
-  n_levels_var <- n_distinct(df$variables[[var]])
-  n_levels_grp <- n_distinct(df$variables[[group]])
-  if (nrow(df) == 0 || n_levels_var < 2 || n_levels_grp < 2) {
-    return(tibble::tibble(
-      Variable = var,
-      `Variable Label` = var_label,
-      `Grouping Variable` = group,
-      `Group Label` = group_label,
-      `Group Levels` = NA,
-      `Variable Levels` = NA,
-      Count = NA_real_,
-      `Count(SE)` = NA_real_,
-      `Count (Lower CI 95%)` = NA_real_,
-      `Count (Upper CI 95%)` = NA_real_,
-      `Count(CV)` = NA_real_
-    ))
-  }
-  df %>% 
-    survey_count(!!sym(group), !!sym(var), name = 'Count', vartype = c("se", "ci", "cv")) %>%
-    mutate(
-      Variable = var,
-      `Grouping Variable` = group,
-      `Variable Label` = var_label,
-      `Group Label` = group_label
-      ) %>% 
-    rename(
-      `Variable Levels` = !!sym(var),      
-      `Group Levels` = !!sym(group),
-    `Count(SE)` = Count_se,
-    `Count (Lower CI 95%)` = Count_low,
-    `Count (Upper CI 95%)` = Count_upp,
-    `Count(CV)` = Count_cv
-    ) %>% 
-    mutate(
-      `Variable Levels` = recode(as.character(`Variable Levels`), `0` = "No", `1` = "Yes"),
-      `Group Levels` = recode(as.character(`Group Levels`), `0` = "No", `1` = "Yes")
-    ) %>% 
-    select(Variable,`Variable Label`,`Grouping Variable`, `Group Label`, `Group Levels`, `Variable Levels`, everything())
-}
-
-calculatePropGrouped <- function(var, group, design, filter_expr = NULL) {
-  f <- rlang::enquo(filter_expr)
-  var_label <- attr(design$variables[[var]], "label")
-  group_label <- attr(design$variables[[group]], "label")
-  if (is.null(var_label)) var_label <- "No Label Specified"
-  if (is.null(group_label)) group_label <- "No Label Specified"
-  tryCatch(
-    {
-    design %>%
-      { if (rlang::quo_is_null(f)) . else filter(., !!f) } %>% 
-      drop_na(!!sym(var), !!sym(group)) %>% 
-      group_by(!!sym(group),!!sym(var) ) %>% 
-      summarise(
-        Prop = survey_prop(x = !!sym(var), na.rm = TRUE, prop_method = "xlogit", vartype= c("se", "ci", "cv")) *100
-        ) %>% 
-      ungroup() %>% 
-        mutate(
-          Variable = var,
-          `Grouping Variable` = group,
-          `Variable Label` = var_label,
-          `Group Label` = group_label
-          ) %>% 
-      rename(
-      `Variable Levels` = !!sym(var),      
-      `Group Levels` = !!sym(group),
-      `Prop(SE)` = Prop_se,
-      `Prop (Lower CI 95%)` = Prop_low,
-      `Prop (Upper CI 95%)` = Prop_upp,
-      `Prop(CV)` = Prop_cv
-        ) %>%
-      mutate(
-        `Variable Levels` = recode(as.character(`Variable Levels`), `0` = "No", `1` = "Yes"),
-        `Group Levels` = recode(as.character(`Group Levels`), `0` = "No", `1` = "Yes")
-      ) %>% 
-      select(Variable,`Variable Label`,`Grouping Variable`, `Group Label`, `Group Levels`, `Variable Levels`, everything())
-  },
-    error = function(e) {
-      warning("Error summarising ", var, ": ", e$message)
-      tibble(
-        Variable           = var,
-        `Variable Label`   = var_label,
-        `Grouping Variable` =group,
-        `Group Label` = group_label,
-        `Group Levels`= NA_character_,
-        `Variable Levels` = NA_character_,
-        Prop               = NA_real_,
-        `Prop(SE)`         = NA_real_,
-        `Prop (Lower CI 95%)`= NA_real_,
-        `Prop (Upper CI 95%)`= NA_real_,
-        `Prop(CV)`         = NA_real_
-      )
-    }
-  )
-}
-
-```
-
-## a) Subset of Respondents Ages 13 to 17 who reported transactional sex (CSEC)
-
-```{r CSECDescripAge13to17, asis = TRUE}
-
-CSECAgeDescriptives <- c("SexTransactAge", "SexTransactInitAge") %>% 
-  map( ~ calculateMean_Total(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age13to17 == 1
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(CSECAgeDescriptives, "Mean & Totals for Transactional Sex Victim and Perpetrator Ages filtered by respondents Ages 13-17")
-    
-
-CSECCount <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
-    map( ~ calculateCount(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age13to17 == 1
-    )
-  ) %>% 
-  list_rbind()
-  
-createKable(CSECCount, "Counts for Transactional Sex, Type of Transactional Sex, and Transactional Sex with a Tourist filtered by respondents Ages 13-17")
-
-
-CSECProp <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
-    map( ~ calculateProp(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age13to17 == 1
-    )
-  ) %>% 
-  list_rbind    
-createKable(CSECProp, "Proportions for Transactional Sex, Type of Transactional Sex, and Transactional Sex with a Tourist filtered by respondents Ages 13-17")
-
-```
-
-## b) Subset of Respondents Ages 18 Plus who reported transactional sex while a minor (CSEC)
-
-```{r CSECDescripAge18PlusCSEC, asis = TRUE}
-
-CSECAgeDescriptives <- c("SexTransactAge", "SexTransactInitAge") %>% 
-  map( ~ calculateMean_Total(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age18Plus == 1 & CSEC == 1
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(CSECAgeDescriptives, "Mean & Totals for Transactional Sex Victim and Perpetrator Ages filtered by respondents Ages 18 Plus who reported CSEC")
-    
-CSECCount <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
-    map( ~ calculateCount(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age18Plus == 1 & CSEC == 1
-    )
-  ) %>% 
-  list_rbind()
-  
-createKable(CSECCount, "Counts for Transactional Sex, Type of Transactional Sex, and Transactional Sex with a Tourist filtered by respondents Ages 18 Plus who reported CSEC")
-
-CSECProp <- c("SexTransact", "SexTransactType", "SexTransactTourist") %>% 
-    map( ~ calculateProp(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age18Plus == 1 & CSEC == 1
-    )
-  ) %>% 
-  list_rbind    
-createKable(CSECProp, "Proportions for Transactional Sex, Type of Transactional Sex, and Transactional Sex with a Tourist filtered by respondents Ages 18 Plus who reported CSEC")
-
-```
-
-# **6. Main Analysis**
-
-Performs the main analyses on CSEC among respondents and associations with demographic, psychosocial, and enviornmental factors. Analysis is filtered by age.
-
-## a) Descriptives, Proportions, and Counts
-
-Proportions were all multiplied by 100 and represent the estimated percentages of the target population.
-
-### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
-
-```{r DescriptivesAge13to17, asis = TRUE}
-
-ContVariables <- c("Age","MoneyWorryCont", "FriendCont", "MomCloseCont","DadCloseCont", "AllInsecure",
-                   "ParMonitContFriends", "ParMonitContMoney", "ParMonitContAftSchool", "ParMonitContNight",
-                   "ParMonitContFreeTime","AllMonit","AllIPVPhys","AllNonParentPhys","AllParentEmotAbuse",
-                   "AllParentPhys","AllIPVEmot","AllMHsxs","WitnessAnyVio","AllPhysViolence","SexAbuseBroad",
-                   "SexAbuseNarrow","IPVTotal","SexInitAge","SexPartners")
-
-CatVariables <- c("Sex","Ethnicity","School","SharedHouse","InternetHome","GovSupport","NGOSupport",
-               "VictimReg","ParentAbs","ChildOutHome","ChildStreet","VictimRegType","MoneyWorry",
-               "FoodSecure","Employed","MomAlive","DadAlive","Partner","SafetyVio","SafetyWar","BullyVic",
-               "MomAway","DadAway","Friend","MomClose","DadClose","BasicSecure","HousingSecure",
-               "ExtraMoneySecure","ParMonitFriends","ParMonitMoney","ParMonitAftSchool","ParMonitNight",
-               "ParMonitFreeTime","SexOrient","WitnessParIPV","WitnessSibAbuse","WitnessComVio",
-               "WitnessArmConflict","SexAct","FirstSexWanted","SexAbuse","PartAttemptRape",
-               "ElseAttemptRape","PartCompleteRape","ElseCompleteRape","Drugs","SelfHarm","SuicideIdea",
-               "SuicideAttempt","STI","Alcohol","PhysCorp")
-
-ContDescriptives <- ContVariables %>% 
-  map( ~ calculateMean_Total(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age13to17 == 1 & !is.na(SexTransact)
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(ContDescriptives, "Mean & Totals for Continous Variables filtered by respondents Ages 13 to 17")
-
-CatDescriptives <- CatVariables %>% 
-  map( ~ calculateProp(
-    var = .x,
-    design = vacsDesign,
-    filter_expr = Age13to17 == 1 & !is.na(SexTransact)
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(CatDescriptives, "Proportions for Categorical and Binarized Variables filtered by respondents Ages 13 to 17")
-```
-
-### ii) Filtered: Ages 18 Plus who reported transactional sex while a minor (CSEC)
-
-```{r DescriptivesAge18PlusCSEC, asis=TRUE}
-
-ContDescriptives <- ContVariables %>% 
-  map( ~ calculateMean_Total(
-    var = .x, 
-    design = vacsDesign,
-    filter_expr = Age18Plus == 1 & CSEC == 1
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(ContDescriptives, "Mean & Totals for vontinuous variables filtered by respondents Ages 18 Plus who reported CSEC")
-
-CatDescriptives <- CatVariables %>% 
-  map( ~ calculateProp(
-    var = .x,
-    design = vacsDesign,
-    filter_expr = Age18Plus == 1 & CSEC == 1
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(CatDescriptives, "Proportions for Categorical and Binarized Variables filtered by respondents Ages 18 Plus who reported CSEC")
-```
-
-## b) Cross-Tabulations & Proportions by CSEC
-
-### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
-
-```{r crossTab1, asis = TRUE}
-        
-crossTabAge13to17 <- CatVariables %>% 
-  map( ~ calculateCrossTab(
-    var = .x, 
-    group = "CSEC",
-    design = vacsDesign,
-    filter_expr = Age13to17 == 1
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(crossTabAge13to17, "Cross-Tabulation of Variables by CSEC for Respondents Ages 13 to 17")
-
-PropAge13to17 <- CatVariables %>% 
-  map( ~ calculatePropGrouped(
-    var = .x, 
-    group = "CSEC",
-    design = vacsDesign,
-    filter_expr = Age13to17 == 1
-    )
-  ) %>% 
-  list_rbind()
-createKable(PropAge13to17, "Proportions of Variables by CSEC for Respondenets Ages 13 to 17")
-
-```
-
-### ii) Filtered: Ages 18 Plus who answered question about transactional sex while underage (CSEC)
-
-```{r crossTab2, asis = TRUE}
-        
-crossTabAge18Plus <- CatVariables %>% 
-  map( ~ calculateCrossTab(
-    var = .x, 
-    group = "CSEC",
-    design = vacsDesign,
-    filter_expr = Age18Plus == 1
-    )
-  ) %>% 
-  list_rbind()
-
-createKable(crossTabAge18Plus, "Cross-Tabulation of Variables by CSEC for Respondents Ages 18 Plus")
-
-PropAge18Plus <- CatVariables %>% 
-  map( ~ calculatePropGrouped(
-    var = .x, 
-    group = "CSEC",
-    design = vacsDesign,
-    filter_expr = Age18Plus == 1
-    )
-  ) %>% 
-  list_rbind()
-createKable(PropAge18Plus, "Proportions of Variables by CSEC for Respondenets Ages 18 Plus")
-
-```
-
-## c) Chi-Square Tests for Categorical Variables by CSEC
-
-Calculated design-adjusted Wald Chi-Square Tests of Indepndence.
-
-### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
-
-```{r chiSqu1, results='asis'}
-
-calculateChiSquTest <- function(var, group, design, filter_expr = NULL, statistic = "adjWald", na.rm = TRUE) {
-    filt_q <- rlang::enquo(filter_expr)
-    var_q <- rlang::enquo(var)
-    group_q <- rlang::enquo(group)
-    
-    fml <- reformulate(c(rlang::quo_name(var_q), rlang::quo_name(group_q)))
-    
-    result_design <- design %>% 
-        { if (rlang::quo_is_null(filt_q)) . else filter(., !!filt_q) }
-    
-    tryCatch({
-        svychisq(
-            formula = fml,
-            design = result_design,
-            statistic = statistic,
-            na.rm = na.rm
-        )
-    }, error = function(e) {
-        warning(paste("Chi-square test failed:", e$message))
-        return(NULL)
-    })
-}
-chisq_table1 <- function(var, group, design, filter_expr = NULL, digits = 4) {
-    var_name <- rlang::quo_name(rlang::enquo(var))
-    group_name <- rlang::quo_name(rlang::enquo(group))
-    
-
-    chisq_result <- calculateChiSquTest(!!rlang::enquo(var), !!rlang::enquo(group), 
-                                       design, !!rlang::enquo(filter_expr))
-    
-    if (is.null(chisq_result)) {
-        cat("Chi-square test failed for: ", var_name, "\n")
-        return(invisible(NULL))
-    }
-    
-
-    cat("<b>Chi-Square Test Results:", var_name, "by", group_name, "</b>\n\n")
-    
-    pval <- chisq_result$p.value
-    stars <- case_when(
-            pval < 0.001 ~ "***",
-            pval < 0.01  ~ "**",
-            pval < 0.05  ~ "*",
-            TRUE         ~ ""
-            )
-    
-    pval_formatted <- if (stars != "") {
-      paste0(stars, format.pval(pval, digits = 3, eps = 1e-3))
-      } else {
-        format.pval(pval, digits = 3, eps = 1e-3)
-              }
-
-    stats_table <- data.frame(
-        F = round(chisq_result$statistic, digits),
-        ndf = chisq_result$parameter[[1]],
-        df = chisq_result$parameter[[2]], 
-        `P Value` = pval_formatted,
-        Method = chisq_result$method,
-        check.names = FALSE
-    )
-    
-
-    table_output <- knitr::kable(stats_table, format = "html") %>%
-        kableExtra::kable_styling(bootstrap_options = c("striped", "condensed"))
-    
-    print(table_output)
-    cat("\n\n<p><em>* p < .05, ** p < .01, *** p < .001</em></p>")
-}
-
-chisq_table2 <- function(var, group, design, filter_expr = NULL, digits = 4) {
-    var_name <- rlang::quo_name(rlang::enquo(var))
-    group_name <- rlang::quo_name(rlang::enquo(group))
-    
-
-    chisq_result <- calculateChiSquTest(!!rlang::enquo(var), !!rlang::enquo(group), 
-                                       design, !!rlang::enquo(filter_expr))
-    
-    if (is.null(chisq_result)) {
-        cat("Chi-square test failed for: ", var_name, "\n")
-        return(invisible(NULL))
-    }
-    
-
-    obs <- chisq_result$observed
-    exp <- chisq_result$expected
-    res <- chisq_result$residuals
-    std <- chisq_result$stdres
-
-    
-    ethnicity <- rownames(obs)
-    table_data <- data.frame(Ethnicity = ethnicity)
-    
-
-    group_levels <- colnames(obs)
-    
-
-    for (component in c("Obs.", "Exp.", "Res.", "StdRes.")) {
-        for (group_level in group_levels) {
-            col_name <- paste(group_name, "=", group_level, component)
-            
-            if (component == "Obs.") {
-                table_data[[col_name]] <- round(obs[, group_level], digits)
-            } else if (component == "Exp.") {
-                table_data[[col_name]] <- round(exp[, group_level], digits)
-            } else if (component == "Res.") {
-                table_data[[col_name]] <- round(res[, group_level], digits)
-            } else if (component == "StdRes.") {
-                table_data[[col_name]] <- round(std[, group_level], digits)
-            }
-        }
-    }
-    
-
-    table_output <- knitr::kable(table_data, format = "html") %>%
-        kableExtra::kable_styling(bootstrap_options = c("striped", "condensed"))
-    print(table_output)
-    
-}
-
-for (v in CatVariables) {
-    cat("\n\n---\n\n") 
-    
-    chisq_table1(!!sym(v), CSEC, vacsDesign, Age13to17 == 1)
-    cat("\n\n")  
-    chisq_table2(!!sym(v), CSEC, vacsDesign, Age13to17 == 1)
-    cat("\n\n")
-}
-
-```
-
-### ii) Filtered: Ages 18 Plus who answered question about transactional sex while underage (CSEC)
-
-```{r chiSqu2, results='asis'}
-
-for (v in CatVariables) {
-    cat("\n\n---\n\n")  
-    
-    chisq_table1(!!sym(v), CSEC, vacsDesign, Age18Plus == 1)
-    cat("\n\n")  
-    chisq_table2(!!sym(v), CSEC, vacsDesign, Age18Plus == 1)
-    cat("\n\n")
-}
-
-```
-
-## d) T-Tests for Continous Variables Grouped by CSEC
-
-Calculated design-adjusted two-sample t-tests.
-
-### i) Filtered: Ages 13 to 17 who answered question about transactional sex (CSEC)
-
-```{r tTest1, results = 'asis'}
-calculateTTest <- function(var, group, design, filter_expr = NULL, na.rm = TRUE) {
-  filt_q <- rlang::enquo(filter_expr)
-  var_q <- rlang::enquo(var)
-  group_q <- rlang::enquo(group)
-  fml <- reformulate(rlang::quo_name(group_q), response = rlang::quo_name(var_q))
-  filtered_des <- design %>% 
-    { if (rlang::quo_is_null(filt_q)) . else filter(., !!filt_q) }
-  
-  test <- svyttest(
-      formula = fml,
-      design = filtered_des,
-      na.rm = na.rm
-    )
-  ci <- confint(test, level=0.95)
-  list(
-    test = test,
-    confint = ci
-  )
-  
-}
-
-ttest_resultsA <- ContVariables %>% 
-  set_names() %>% 
-  map(~{
-    result <- calculateTTest(
-      var = !!rlang::sym(.x),
-      group = CSEC,
-      design = vacsDesign,
-      filter_expr = Age13to17 == 1
-    )
-    
-    pval <- result$test$p.value
-    stars <- case_when(
-      pval < 0.001 ~ "***",
-      pval < 0.01  ~ "**",
-      pval < 0.05  ~ "*",
-      TRUE         ~ ""
-    )
-    
-    pval_formatted <- if (stars != "") {
-      paste0(stars, format.pval(pval, digits = 3, eps = 1e-3))
-      } else {
-        format.pval(pval, digits = 3, eps = 1e-3)
-        }
-    
-    tibble(
-      Variable = .x,
-      `Mean Diff.` = round(result$test$estimate, 3),
-      `t-Statistic` = round(result$test$statistic, 3),
-      df = round(result$test$parameter, 1),
-      `p-value` = pval_formatted,
-      `95% CI Lower` = round(result$confint[1], 3),
-      `95% CI Upper` = round(result$confint[2], 3),
-      Method = paste0(result$test$method),
-      Direction = paste0(result$test$alternative)
-    )
-  }) %>% 
-  bind_rows()
-
-knitr::kable(ttest_resultsA, caption = "T-test Results for Age 13–17", format = "html") %>%
-  kableExtra::kable_styling(bootstrap_options = c("striped", "condensed"))
-
-cat("\n\n<p><em>* p < .05, ** p < .01, *** p < .001</em></p>")
-
-```
-
-### ii) Filtered: Ages 18 Plus who answered question about transactional sex while underage (CSEC)
-
-```{r tTest2, results='asis'}
-
-ttest_resultsB <- ContVariables %>% 
-  set_names() %>% 
-  map(~{
-    result <- calculateTTest(
-      var = !!rlang::sym(.x),
-      group = CSEC,
-      design = vacsDesign,
-      filter_expr = Age18Plus == 1
-    )
-    
-    pval <- result$test$p.value
-    stars <- case_when(
-      pval < 0.001 ~ "***",
-      pval < 0.01  ~ "**",
-      pval < 0.05  ~ "*",
-      TRUE         ~ ""
-    )
-    
-    pval_formatted <- if (stars != "") {
-      paste0(stars, format.pval(pval, digits = 3, eps = 1e-3))
-      } else {
-        format.pval(pval, digits = 3, eps = 1e-3)
-        }
-    
-    tibble(
-      Variable = .x,
-      `Mean Diff.` = round(result$test$estimate, 3),
-      `t-Statistic` = round(result$test$statistic, 3),
-      df = round(result$test$parameter, 1),
-      `p-value` = pval_formatted,
-      `95% CI Lower` = round(result$confint[1], 3),
-      `95% CI Upper` = round(result$confint[2], 3),
-      Method = paste0(result$test$method),
-      Direction = paste0(result$test$alternative)
-    )
-  }) %>% 
-  bind_rows()
-
-
-knitr::kable(ttest_resultsB, caption = "T-test Results for Age 18+", format = "html") %>%
-  kableExtra::kable_styling(bootstrap_options = c("striped", "condensed"))
-
-cat("\n\n<p><em>* p < .05, ** p < .01, *** p < .001</em></p>")
-```
 
 # **References & Resources**
 
