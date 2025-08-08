@@ -55,10 +55,8 @@ Check the raw dataset for missing values by preparing a missing value graph to s
 ```{r missingVars}
 rawDF <- VACSData %>%
   select(
-    DEPT, MUNI, PSU, USM, HH, VACS_ID, Wght_final, H6, H7H, H18, H19, H19A, H54, H56, H58, H19B,
-    H20, Sex, Q2, Q2A, Q3, Q7AA, Q13, Q19, Q29, Q58, Q70, Q71, Q306, Q21, Q31, Q7, Q25, Q35,
-    Q7AB, Q7AC, Q7AD,
-    Q36A, Q36B, Q36C, Q36D, Q36E,
+    DEPT, MUNI, PSU, USM, HH, VACS_ID, Wght_final, H6, H7H, H18, H19, H19A, H54, H56, H58,
+    H20, Sex, Q2, Q2A, Q3, Q13, Q19, Q29, Q58, Q70, Q71, Q306, Q21, Q31, Q7, Q36E,
     Q59, Q80, Q82, Q84, Q86,
     Q407, Q409, Q500, Q600,
     Q700A, Q700B, Q800A, Q800B,
@@ -70,7 +68,7 @@ rawDF <- VACSData %>%
     Q300A, Q300B, Q300C, Q300D,
     Q305A, Q305B, Q305C, Q305D, Q305E, Q305F,
     Q1206A, Q1206B, Q1206C, Q1206D, Q1206E, Q1206F,
-    Q400B, Q408, Q417, Q504, Q505, Q503
+    Q400B, Q417, Q503
   )
 
 #ggsave(
@@ -162,13 +160,6 @@ cleaned_var_mapping <- c(
   "H54" = "ParentAbs",
   "H56" = "ChildOutHome", 
   "H58" = "ChildStreet",
-  "H19B" = "VictimRegType",
-  "Q7AA" = "FoodSecure",
-  "Q306" = "BullyVic",
-  "Q7AB" = "BasicSecure",
-  "Q7AC" = "HousingSecure", 
-  "Q7AD" = "ExtraMoneySecure",
-  "Q36C" = "ParMonitAftSchool",
   "Q409" = "FirstSexWanted",
   "Q500" = "SexTransact",
   "Q1209" = "SuicideAttempt",
@@ -179,10 +170,7 @@ cleaned_var_mapping <- c(
   "Q305E" = "IPVEmot5",
   "Q305F" = "IPVEmot6",
   "Q400B" = "PhysCorp",
-  "Q408" = "SexInitAge",
-  "Q417" = "SexPartners",
-  "Q504" = "SexTransactAge",
-  "Q505" = "SexTransactInitAge"
+  "Q417" = "SexPartners"
 )
 
 # Filter for variables with completion rate < 75%
@@ -214,7 +202,6 @@ To look at these patterns in more detail, we can look at the breakdown of missin
 **Figure A: Variables without skip option by Sex**
 
 Notes: 
-- Q306 (BullyVic) seems missing across both Sexes
 - Q58 (Partner) seems to have less missing values for males
 
 ```{r missingVal_By_Sex, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=100, fig.height=40}
@@ -232,8 +219,8 @@ cat('<div style="
 
 selectDF <- rawDF %>% 
         select(
-                Sex, H6, H7H, H18, H19, H19A, H20, Q7AA, 
-                Q58, Q306, Q21, Q25, Q35)
+                Sex, H6, H7H, H18, H19, H19A, H20,
+                Q58, Q21)
 
 miss_by_sex <- selectDF %>%
   gg_miss_fct(Sex) +
@@ -261,8 +248,7 @@ cat('</div>')
 **Figure B: Variables without skip option by Age**
 
 Notes: 
-- Q306 (BullyVic) seems missing across all Ages
-- Q58 (Partner) and Q7AA (FoodSecure) seems to have less missing values for younger individuals
+- Q58 (Partner) seems to have less missing values for younger individuals
 
 ```{r missingVal_By_Age, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=100, fig.height=40}
 cat('<div style="
@@ -279,8 +265,8 @@ cat('<div style="
 
 selectDF <- rawDF %>% 
         select(
-                Q2, H6, H7H, H18, H19, H19A, H20, Q7AA, 
-                Q58, Q306, Q21, Q25, Q35)
+                Q2, H6, H7H, H18, H19, H19A, H20,
+                Q58, Q21)
 
 miss_by_age <- selectDF %>%
   gg_miss_fct(Q2) +
@@ -476,23 +462,17 @@ df <- VACSData %>%
                         labels = ParentAbsLabels),
                 ChildOutHome = recode_bin(H56),
                 ChildStreet = recode_bin(H58),
-                VictimRegType = recode_factor(
-                        H19B,
-                        levels = 1:12,
-                        labels = VictimRegTypeLabels),
                 MoneyWorry = recode_factor(
                         H20,
                         levels = 1:5,
                         labels = MoneyWorryLabels),
                 MoneyWorryCont = reverse_5(H20, as_factor = FALSE),
-                FoodSecure = recode_bin(Q7AA),
                 Employed = recode_bin(Q13),
                 MomAlive = recode_bin(Q19),
                 DadAlive = recode_bin(Q29),
                 Partner = recode_bin(Q58),
                 SafetyVio = recode_bin(Q70),
                 SafetyWar = recode_bin(Q71),
-                BullyVic = recode_bin(Q306),
                 MomAway = recode_bin(
                         case_when(Q21 %in% c(98, 99)   ~NA_real_,
                                   Q21 == 11            ~2,
@@ -507,38 +487,9 @@ df <- VACSData %>%
                                        levels = 1:4,
                                        labels = FriendLabels),
                 FriendCont = reverse_4(Q7, as_factor = FALSE),
-                MomClose = recode_factor(Q25,
-                                         levels = 1:4,
-                                         labels = CloseLabels),
-                MomCloseCont = reverse_4(Q25, as_factor = FALSE),
-                DadClose = recode_factor(Q35,
-                                         levels = 1:4,
-                                         labels = CloseLabels),
-                DadCloseCont = reverse_4(Q35, as_factor = FALSE),
-                BasicSecure = recode_bin(Q7AB),
-                HousingSecure = recode_bin(Q7AC),
-                ExtraMoneySecure = recode_bin(Q7AD),
-       
-                ParMonitFriends = recode_factor(Q36A,
-                                                levels = 1:3,
-                                                labels = MonitLabels),
-                ParMonitMoney = recode_factor(Q36B,
-                                                levels = 1:3,
-                                                labels = MonitLabels),
-                ParMonitAftSchool = recode_factor(Q36C,
-                                                levels = 1:3,
-                                                labels = MonitLabels),
-                ParMonitNight = recode_factor(Q36D,
-                                                levels = 1:3,
-                                                labels = MonitLabels),
                 ParMonitFreeTime = recode_factor(Q36E,
                                                 levels = 1:3,
                                                 labels = MonitLabels),
-                       
-                ParMonitContFriends = reverse_3(Q36A, as_factor = FALSE),
-                ParMonitContMoney = reverse_3(Q36B, as_factor = FALSE),
-                ParMonitContAftSchool = reverse_3(Q36C, as_factor = FALSE),
-                ParMonitContNight = reverse_3(Q36D, as_factor = FALSE),
                 ParMonitContFreeTime = reverse_3(Q36E, as_factor = FALSE),
                 
                 SexOrient = recode_factor(Q59,
@@ -634,29 +585,14 @@ df <- VACSData %>%
                         
                 ),
                 PhysCorp = recode_bin(Q400B),
-                SexInitAge = recode_copy(Q408),
                 SexPartners = recode_copy(Q417),
-                SexTransactAge = recode_copy(Q504),
-                SexTransactInitAge = recode_copy(Q505),
-                SexTransactType = recode_factor(
-                        Q503,
-                        levels = names(SexTransactTypeLabels),
-                        labels = unname(SexTransactTypeLabels)
-                ),
                 SexTransactTourist = recode_bin(
                         case_when(Q503 %in% c("J", "W")       ~ 1,
                                         Q503 %in% c("Z", "Y") ~ NA_real_,
                                         is.na(Q503)           ~ NA_real_,
                                         TRUE                  ~ 2
                         )),
-                AllInsecure = rowSums(
-                        across(c(FoodSecure, BasicSecure, HousingSecure, ExtraMoneySecure),
                                ~ .x == 0),
-                        na.rm = FALSE
-                ),
-                AllMonit = rowSums(
-                        across(starts_with("ParMonitCont"),
-                               ~!is.na(.x)),
                         na.rm = FALSE
                 ),
                 AllIPVPhys = rowSums(
@@ -741,37 +677,19 @@ df <- VACSData %>%
         ParentAbs,
         ChildOutHome,
         ChildStreet,
-        VictimRegType,
         MoneyWorry,
         MoneyWorryCont,
-        FoodSecure,
         Employed,
         MomAlive,
         DadAlive,
         Partner,
         SafetyVio,
         SafetyWar,
-        BullyVic,
         MomAway,
         DadAway,
         Friend,
         FriendCont,
-        MomClose,
-        MomCloseCont,
-        DadClose ,
-        DadCloseCont,
-        BasicSecure,
-        HousingSecure,
-        ExtraMoneySecure,
-        ParMonitFriends,
-        ParMonitMoney,
-        ParMonitAftSchool,
-        ParMonitNight,
         ParMonitFreeTime,
-        ParMonitContFriends,
-        ParMonitContMoney,
-        ParMonitContAftSchool,
-        ParMonitContNight,
         ParMonitContFreeTime,
         SexOrient,
         WitnessParIPV,
@@ -825,14 +743,8 @@ df <- VACSData %>%
         MHE,
         MHF,
         PhysCorp,
-        SexInitAge,
         SexPartners,
-        SexTransactAge,
-        SexTransactInitAge,
-        SexTransactType,
         SexTransactTourist,
-        AllInsecure,
-        AllMonit,
         AllIPVPhys,
         AllNonParentPhys,
         AllParentEmotAbuse,
@@ -867,7 +779,6 @@ df <- set_variable_labels(df,
                             ParentAbs = "Respondent <18 living in household because parent is sick, died, moved away, or imprisoned",
                             ChildOutHome = "Respondent <18 lived outside family care in past 5 years",
                             ChildStreet = "Respondent <18 lived on the street in past 5 years",
-                            VictimRegType = "Event that led to member of household being included on victim registry",
                             MoneyWorry = "Family worry about affording food in past 12 months",
                             MoneyWorryCont = "Family worry about affording food in past 12 months on scale from 0 to 5",
                             FoodSecure = "Household food security",
@@ -877,27 +788,14 @@ df <- set_variable_labels(df,
                             Partner = "Ever had a boyfriend or romantic partner",
                             SafetyVio = "Ever left school/home due to fear of community violence",
                             SafetyWar = "Ever left school/home due to fear of police/military",
-                            BullyVic = "Bullying victim",
                             MomAway = "Bio mom ever lived far away",
                             DadAway = "Bio dad ever lived far away",
                             Friend = "Closeness to friends",
                             FriendCont = "Closeness to friends on scale from 0 to 4",
-                            MomClose = "Bio mom close",
-                            MomCloseCont = "Bio mom close on scale from 0 to 4",
-                            DadClose = "Bio dad close",
-                            DadCloseCont = "Bio dad close on scale from 0 to 4",
                             BasicSecure = "Basic need security",
                             HousingSecure = "Housing security",
                             ExtraMoneySecure = "Extra money security",
-                            ParMonitFriends = "Parents Monitor Friends",
-                            ParMonitMoney = "Parents Monitor Spending",
-                            ParMonitAftSchool = "Parents Monitor After School",
-                            ParMonitNight = "Parents Monitor at Night",
                             ParMonitFreeTime = "Parents Monitor Free Time",
-                            ParMonitContFriends = "Parents Monitor Friends on scale from 0 to 3",
-                            ParMonitContMoney = "Parents Monitor Spending on scale from 0 to 3",
-                            ParMonitContAftSchool = "Parents Monitor After School on scale from 0 to 3",
-                            ParMonitContNight = "Parents Monitor at Night on scale from 0 to 3",
                             ParMonitContFreeTime = "Parents Monitor Free Time on scale from 0 to 3",
                             SexOrient = "Sexual Orientation",
                             WitnessParIPV = "Witness parental IPV",
@@ -953,10 +851,7 @@ df <- set_variable_labels(df,
                             PhysCorp = "Physical corporal punishment parent",
                             SexInitAge = "Age when first had sex",
                             SexPartners = "Number of sexual partners",
-                            SexTransactAge = "Age of respondent during first transactional sex",
-                            SexTransactInitAge = "Age of initiator during first transactional sex ",
                             SexTransactTourist = "Whether transactional sex initiator was a tourist",
-                            SexTransactType = "Identity of initiator during first transactional sex",
                             AllInsecure = "Food, Basic, Housing, or Extra Money Insecurity on a scale from 0 to 4",
                             AllMonit = "All parental monitoring on a scale from 0 to 15",
                             AllIPVPhys = "All intimate partner physical violence",
