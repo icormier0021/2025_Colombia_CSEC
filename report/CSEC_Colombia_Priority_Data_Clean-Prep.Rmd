@@ -157,10 +157,45 @@ missing_summary <- rawDF %>%
     Completion_Rate = round(((Total_Observations - n_Missing) / Total_Observations) * 100, 2)
   )
 
+# Create mapping for cleaned variable names
+cleaned_var_mapping <- c(
+  "H54" = "ParentAbs",
+  "H56" = "ChildOutHome", 
+  "H58" = "ChildStreet",
+  "H19B" = "VictimRegType",
+  "Q7AA" = "FoodSecure",
+  "Q58" = "Partner",
+  "Q306" = "BullyVic",
+  "Q7AB" = "BasicSecure",
+  "Q7AC" = "HousingSecure", 
+  "Q7AD" = "ExtraMoneySecure",
+  "Q36C" = "ParMonitAftSchool",
+  "Q409" = "FirstSexWanted",
+  "Q500" = "SexTransact",
+  "Q1209" = "SuicideAttempt",
+  "Q305A" = "IPVEmot1",
+  "Q305B" = "IPVEmot2",
+  "Q305C" = "IPVEmot3",
+  "Q305D" = "IPVEmot4",
+  "Q305E" = "IPVEmot5",
+  "Q305F" = "IPVEmot6",
+  "Q400B" = "PhysCorp",
+  "Q408" = "SexInitAge",
+  "Q417" = "SexPartners",
+  "Q504" = "SexTransactAge",
+  "Q505" = "SexTransactInitAge"
+)
+
 # Filter for variables with completion rate < 75%
 low_completion <- missing_summary %>%
   filter(Completion_Rate < 75) %>%
-  select(`Variable Name` = Variable_Name, 
+  mutate(
+    Cleaned_Var_Name = ifelse(Variable_Name %in% names(cleaned_var_mapping), 
+                              cleaned_var_mapping[Variable_Name], 
+                              Variable_Name)
+  ) %>%
+  select(`Variable Name` = Variable_Name,
+         `Cleaned Var Name` = Cleaned_Var_Name,
          `n Missing` = n_Missing, 
          `Total Observations` = Total_Observations,
          `Completion Rate (%)` = Completion_Rate)
@@ -169,7 +204,7 @@ low_completion <- missing_summary %>%
 if(nrow(low_completion) > 0) {
   knitr::kable(low_completion, 
                caption = "Variables with Completion Rate < 75%",
-               align = c("l", "c", "c"))
+               align = c("l", "l", "c", "c", "c"))
 } else {
   cat("No variables have completion rates below 75%")
 }
