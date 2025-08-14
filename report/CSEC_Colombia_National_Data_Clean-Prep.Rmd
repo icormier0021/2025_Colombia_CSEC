@@ -453,7 +453,14 @@ df <- VACSData %>%
                 School = recode_bin(Q3),
                 SharedHouse  = recode_bin(H6),
                 InternetHome = recode_bin(H7H),
-                GovSupport = recode_bin(H18),
+                GovSupport = recode(case_when(
+                        H18 == 1 | H19 == 1                        ~1,
+                        H18 == 2 & H19 != 1 | H19 == 2 & H18 != 1  ~0,
+                        
+                        H18 %in% c(98,99) & H19
+                        Q31 %in% c(98, 99)   ~NA_real_, 
+                                  Q31 == 11            ~0, 
+                        )),
                 NGOSupport = recode_bin(H19),
                 VictimReg = recode_bin(H19A),
                 ParentAbs = recode_factor(
