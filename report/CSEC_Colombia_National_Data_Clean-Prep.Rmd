@@ -56,7 +56,7 @@ Check the raw dataset for missing values by preparing a missing value graph to s
 rawDF <- VACSData %>%
   select(
     DEPT, MUNI, PSU, USM, HH, VACS_ID, Wght_final, H6, H7H, H18, H19, H19A, H54, H56, H58,
-    H20, Sex, Q2, Q2A, Q3, Q13, Q19, Q29, Q58, Q70, Q71, Q306, Q21, Q31, Q7, Q36E,
+    H20, Sex, Q2, Q2A, Q3, Q13, Q19, Q29, Q50, Q55, Q58, Q70, Q71, Q306, Q21, Q31, Q7, Q36E,
     Q59, Q80, Q82, Q84, Q86,
     Q407, Q409, Q500, Q600,
     Q700A, Q700B, Q800A, Q800B,
@@ -453,20 +453,17 @@ df <- VACSData %>%
                 School = recode_bin(Q3),
                 SharedHouse  = recode_bin(H6),
                 InternetHome = recode_bin(H7H),
-                GovSupport = recode(case_when(
+                FinanceSupport = recode(case_when(
                         H18 == 1 | H19 == 1                        ~1,
                         H18 == 2 & H19 != 1 | H19 == 2 & H18 != 1  ~0,
-                        
-                        H18 %in% c(98,99) & H19
-                        Q31 %in% c(98, 99)   ~NA_real_, 
-                                  Q31 == 11            ~0, 
+                        H18 %in% c(98,99,NA) & H19 %in% c(98,99,NA)~NA_real_
                         )),
-                NGOSupport = recode_bin(H19),
                 VictimReg = recode_bin(H19A),
-                ParentAbs = recode_factor(
-                        H54,
-                        levels = 1:5,
-                        labels = ParentAbsLabels),
+                ParentAbs = case_when(
+                                H54 %in% c(1,2,3,4)              ~1,
+                                is.na(H54) & Q2 > 17 | H54 == 5  ~0,
+                                H54 %in% c(98,99)                ~NA_real_
+                                ),
                 ChildOutHome = recode_bin(H56),
                 ChildStreet = recode_bin(H58),
                 MoneyWorry = recode_factor(
@@ -477,7 +474,11 @@ df <- VACSData %>%
                 Employed = recode_bin(Q13),
                 MomAlive = recode_bin(Q19),
                 DadAlive = recode_bin(Q29),
-                Partner = recode_bin(Q58),
+                RomanticHx = case_when(
+                        Q50 == 1 | Q55 == 1 | Q58 == 1 ~1,
+                        Q58 == 2 & Q55 == 2 & Q58 == 2 ~0,
+                        Q50 %in% c(98,99,NA) & Q55 %in% c(98,99,NA) & Q58 %in% c(98,99,NA) ~NA_real_
+                ),
                 SafetyVio = recode_bin(Q70),
                 SafetyWar = recode_bin(Q71),
                 MomAway = recode_bin(
@@ -534,8 +535,11 @@ df <- VACSData %>%
                                   )),
                 SexAct =  recode_bin(Q407),
                 FirstSexWanted = recode_bin(Q409),
-                SexTransact = recode_bin(Q500),
-
+                SexTransact = case_when(
+                        Q500 == 1             ~1,
+                        Q407 == 2 | Q500 ==2  ~0,
+                        Q500 %in% c(98,99,NA) ~NA_real_
+                ),
                 SexAbuse = recode_bin(Q600),
                 PartAttemptRape = recode_bin(Q700A),
                 ElseAttemptRape = recode_bin(Q700B),
@@ -678,8 +682,7 @@ df <- VACSData %>%
         School,
         SharedHouse,
         InternetHome,
-        GovSupport,
-        NGOSupport,
+        FinanceSupport,
         VictimReg,
         ParentAbs,
         ChildOutHome,
@@ -689,7 +692,7 @@ df <- VACSData %>%
         Employed,
         MomAlive,
         DadAlive,
-        Partner,
+        RomanticHx,
         SafetyVio,
         SafetyWar,
         MomAway,
@@ -780,8 +783,7 @@ df <- set_variable_labels(df,
                             Wght_final = "Final sampling weight",
                             SharedHouse = "Household shares toilet facilities with other households",
                             InternetHome = "Household has access to internet",
-                            GovSupport = "Member of household receives financial government assistance",
-                            NGOSupport = "Member of household receives financial non-government assistance",
+                            FinanceSupport = "Member of household receives financial government or non-government assistance",
                             VictimReg = "Member of household been included in National Victim's Registry",
                             ParentAbs = "Respondent <18 living in household because parent is sick, died, moved away, or imprisoned",
                             ChildOutHome = "Respondent <18 lived outside family care in past 5 years",
@@ -792,7 +794,7 @@ df <- set_variable_labels(df,
                             Employed = "Employed anytime within past 12 months",
                             MomAlive = "Bio mom alive",
                             DadAlive = "Bio dad alive",
-                            Partner = "Ever had a boyfriend or romantic partner",
+                            RomanticHx = "Ever been married, lived with a long-term romantic partner, or had a romantic partner",
                             SafetyVio = "Ever left school/home due to fear of community violence",
                             SafetyWar = "Ever left school/home due to fear of police/military",
                             MomAway = "Bio mom ever lived far away",
