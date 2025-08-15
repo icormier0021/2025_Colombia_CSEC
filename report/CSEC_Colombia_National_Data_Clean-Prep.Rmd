@@ -300,10 +300,10 @@ recode_bin <- function(x,
                       levels = c(1,0),
                       labels = c("Yes", "No")) {
         out <- dplyr::case_when(
-                x %in% c(98, 99) ~ NA_real_,
-                x == 1           ~ 1,
-                x == 2           ~ 0,
-                TRUE             ~ NA_real_
+                
+                x == 1              ~ 1,
+                x == 2              ~ 0,
+                x %in% c(98, 99) | is.na(x) ~ NA_real_
         )
         if (as_factor) {
                 factor(out, levels = levels, labels = labels)
@@ -330,7 +330,7 @@ recode_factor <- function(x, levels, labels){
         factor(out,
                levels = as.character(levels),
                labels = labels)
-}
+}       
 
 recode_copy <- function(x) {
         case_when(
@@ -339,13 +339,12 @@ recode_copy <- function(x) {
         )
 }
 reverse_n <- function(x, n,
-                      as_factor = TRUE,
+                      as_factor = FALSE,
                       levels = seq(0, n),
                       labels = as.character(levels)){
         out <- case_when(
-                x %in% c(98, 99)   ~ NA_real_,
+                x %in% c(98, 99) | is.na(x)  ~ NA_real_,
                 x >= 1 & x <= n    ~ (n + 1) - x,
-                TRUE               ~ NA_real_
         )
         if (as_factor) {
                 factor(out, levels = levels, labels = labels)
